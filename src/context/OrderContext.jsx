@@ -1,0 +1,205 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { getDeliveryNotes as apiGetDeliveryNotes, createDeliveryNoteFromSalesOrder, submitDeliveryNotePicking } from '../api/deliveryNote';
+import { getPendingSalesOrders } from '../api/salesOrder';
+
+const OrderContext = createContext(null);
+
+// eslint-disable-next-line react-refresh/only-export-components
+export const useOrders = () => useContext(OrderContext);
+
+export const OrderProvider = ({ children }) => {
+  const [orders, setOrders] = useState([]); // Pending SOs
+  const [deliveryNotes, setDeliveryNotes] = useState([]); // DNs
+  const [activeOrder, setActiveOrder] = useState(null); // Selected DN for picking
+  const [loading, setLoading] = useState(false);
+  const [errorState, setErrorState] = useState(null);
+  const [activeOrderError, setActiveOrderError] = useState(null);
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, type = 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const fetchOrders = async () => {
+    setLoading(true);
+    setErrorState(null);
+    try {
+      const data = await getPendingSalesOrders();
+      if (data) {
+        const mappedOrders = data.map(item => ({
+          orderNumber: item.name,
+          customerInfo: { name: item.customer },
+          transactionDate: item.transaction_date,
+          totalItems: item.total_items,
+          itemsSummary: item.items_summary
+        }));
+        setOrders(mappedOrders);
+      }
+    } catch {
+      setErrorState('Gagal memuat antrean pesanan.');
+      showToast('Gagal memuat daftar pesanan.', 'error');
+      setOrders([]); 
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchDeliveryNotes = async () => {
+    setLoading(true);
+    setErrorState(null);
+    try {
+      const data = await apiGetDeliveryNotes('', 1, 20); // List general
+      if (data) {
+        const mappedDNs = data.map(item => ({
+          deliveryNoteNo: item.name,
+          salesOrderNo: item.against_sales_order,
+          customer: item.customer,
+          postingDate: item.posting_date,
+          status: item.status,
+          poNo: item.po_no,
+          items: item.items ? item.items.map(i => ({
+            itemCode: i.item_code,
+            itemName: i.item_name,
+            qty: i.qty,
+            warehouse: i.warehouse,
+            // Add state tracking for picking
+            orderedQty: i.qty,
+            pickedQty: 0
+          })) : []
+        }));
+        setDeliveryNotes(mappedDNs);
+      }
+    } catch {
+      setErrorState('Gagal memuat daftar Delivery Note.');
+      showToast('Gagal memuat Delivery Note.', 'error');
+      setDeliveryNotes([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOrders();
+    fetchDeliveryNotes();
+  }, []);
+
+  const createDN = async (orderNumber) => {
+    setLoading(true);
+    try {
+      const res = await createDeliveryNoteFromSalesOrder(orderNumber);
+      if (res && res.status === 'success') {
+        showToast(`Berhasil membuat DN: ${res.dn_name}`, 'success');
+        // Refresh DN list and SO list
+        await fetchDeliveryNotes();
+        await fetchOrders();
+        return true;
+      }
+    } catch {
+      showToast('Gagal membuat Delivery Note.', 'error');
+    } finally {
+      setLoading(false);
+    }
+    return false;
+  };
+
+  const selectDeliveryNote = (dnObject) => {
+    setActiveOrder(dnObject);
+    setActiveOrderError(null);
+  };
+
+  const selectOrder = async (orderNumber) => {
+    // Deprecated for directly opening Picking, used only if needed
+    setActiveOrderError('Gunakan Create DN terlebih dahulu.');
+  };
+
+  const clearActiveOrder = () => {
+    setActiveOrder(null);
+    setActiveOrderError(null);
+  };
+
+  const updateQuantity = (itemCode, delta) => {
+    if (!activeOrder) return;
+    
+    setActiveOrder(prev => {
+      const newItems = prev.items.map(item => {
+        if (item.itemCode === itemCode) {
+          const newQty = item.pickedQty + delta;
+          if (newQty < 0) return item;
+          if (newQty > item.orderedQty) {
+            showToast('Produk melebihi pesanan. Kembalikan ke rak.', 'error');
+            return item;
+          }
+          return { ...item, pickedQty: newQty };
+        }
+        return item;
+      });
+      return { ...prev, items: newItems };
+    });
+  };
+
+  const scanProduct = (barcode) => {
+    if (!activeOrder) return;
+    
+    const orderItemIndex = activeOrder.items.findIndex(i => i.itemCode === barcode);
+    if (orderItemIndex === -1) {
+      showToast('Produk tidak ada di pesanan.', 'error');
+      return;
+    }
+
+    updateQuantity(activeOrder.items[orderItemIndex].itemCode, 1);
+  };
+
+  const completeOrder = async (pickupLater = false) => {
+    if (!activeOrder) return false;
+    
+    const isFullyPicked = activeOrder.items.every(i => i.pickedQty === i.orderedQty);
+    if (!isFullyPicked) {
+      showToast('Masih ada produk yang belum diambil.', 'error');
+      return false;
+    }
+
+    setLoading(true);
+    try {
+      // Map back to ERPNext format for submission
+      const updatedItems = activeOrder.items.map(item => ({
+        item_code: item.itemCode,
+        qty: item.pickedQty
+      }));
+      
+      await submitDeliveryNotePicking(activeOrder.deliveryNoteNo, updatedItems, pickupLater);
+      
+      showToast('Picking selesai.', 'success');
+      fetchDeliveryNotes(); // Refresh list
+      return true;
+    } catch {
+      showToast('Gagal menyimpan progress picking.', 'error');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <OrderContext.Provider value={{
+      orders,
+      deliveryNotes,
+      activeOrder,
+      loading,
+      errorState,
+      activeOrderError,
+      selectOrder,
+      createDN,
+      selectDeliveryNote,
+      clearActiveOrder,
+      updateQuantity,
+      scanProduct,
+      completeOrder,
+      fetchOrders,
+      fetchDeliveryNotes,
+      toast
+    }}>
+      {children}
+    </OrderContext.Provider>
+  );
+};
