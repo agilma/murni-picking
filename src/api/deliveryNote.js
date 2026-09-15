@@ -46,7 +46,7 @@ export const buildDeliveryNoteSubmitPayload = ({ deliveryNoteNo, items, pickupLa
   const payload = {
     name: deliveryNoteNo,
     items: items,
-    custom_pickup_later: pickupLater
+    custom_pickup_later: pickupLater ? 1 : 0
   };
   
   return payload;
