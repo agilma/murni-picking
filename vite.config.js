@@ -1,5 +1,8 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig, loadEnv } from 'vite'
+import fs from 'fs'
+
+const packageJson = JSON.parse(fs.readFileSync('./package.json', 'utf8'))
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
@@ -7,6 +10,9 @@ export default defineConfig(({ mode }) => {
   const targetUrl = env.THUNDER_API_TARGET || 'https://dev.thunderlab.id'
 
   return {
+    define: {
+      '__APP_VERSION__': JSON.stringify(packageJson.version)
+    },
     server: {
       host: '0.0.0.0',
       port: 5173,

@@ -43,15 +43,11 @@ export const createDeliveryNoteFromSalesOrder = async (salesOrder) => {
  * Payload adapter preps for pickup_later if backend eventually supports it.
  */
 export const buildDeliveryNoteSubmitPayload = ({ deliveryNoteNo, items, pickupLater }) => {
-  // Current supported payload
   const payload = {
     name: deliveryNoteNo,
-    items: items
+    items: items,
+    custom_pickup_later: pickupLater
   };
-  
-  // Frontend only: Keep pickupLater in adapter signature, but DO NOT send to backend yet
-  // Once backend supports it, we can just add:
-  // payload.pickup_later = pickupLater ? "Yes" : "No";
   
   return payload;
 };

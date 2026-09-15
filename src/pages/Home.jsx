@@ -1,24 +1,47 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOrders } from '../context/OrderContext';
-import { Search, Package, MapPin, QrCode, Calendar, Truck, ClipboardList } from 'lucide-react';
+import { Search, Package, MapPin, QrCode, Calendar, Truck, ClipboardList, ChevronLeft } from 'lucide-react';
+
+const parseItemsSummary = (summary) => {
+  if (!summary) return [];
+  const results = [];
+  const regex = /(.*?)\s*\((\d+)\)(?:,\s*|$)/g;
+  let match;
+  let hasMatches = false;
+  
+  while ((match = regex.exec(summary)) !== null) {
+    hasMatches = true;
+    results.push({
+      name: match[1].trim(),
+      qty: parseInt(match[2], 10)
+    });
+  }
+  
+  if (!hasMatches && summary.trim().length > 0) {
+    return summary.split(',').map(s => ({ name: s.trim(), qty: '-' }));
+  }
+  return results;
+};
 
 const Home = () => {
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('pending'); // 'pending' | 'dn'
-  const { orders, deliveryNotes, createDN, selectDeliveryNote, loading, errorState } = useOrders();
+  const [selectedSO, setSelectedSO] = useState(null); // Local state for Detail SO
+  const [selectedDN, setSelectedDN] = useState(null); // Local state for Detail DN
+  const { orders, deliveryNotes, createDN, selectDeliveryNote, loading, ordersError, dnError, fetchOrders, fetchDeliveryNotes } = useOrders();
   const navigate = useNavigate();
 
   const handleCreateDN = async (orderNumber) => {
     const success = await createDN(orderNumber);
     if (success) {
+      setSelectedSO(null);
       setActiveTab('dn'); // Switch to delivery note list after success
     }
   };
 
   const handleSelectDN = (dnObject) => {
-    selectDeliveryNote(dnObject);
-    navigate('/picking');
+    setSelectedDN(dnObject);
   };
 
   const filteredOrders = orders.filter(o => 
@@ -60,7 +83,7 @@ const Home = () => {
 
       <div style={{ display: 'flex', padding: '16px 16px 0 16px', gap: '8px' }}>
         <button 
-          onClick={() => setActiveTab('pending')}
+          onClick={() => { setActiveTab('pending'); setSelectedSO(null); setSelectedDN(null); }}
           style={{ 
             flex: 1, 
             padding: '12px', 
@@ -79,7 +102,7 @@ const Home = () => {
           Antrean SO · {filteredOrders.length}
         </button>
         <button 
-          onClick={() => setActiveTab('dn')}
+          onClick={() => { setActiveTab('dn'); setSelectedSO(null); setSelectedDN(null); }}
           style={{ 
             flex: 1, 
             padding: '12px', 
@@ -100,26 +123,327 @@ const Home = () => {
       </div>
 
       <div className="flex-col p-4" style={{ backgroundColor: 'var(--bg-elevated)', minHeight: '300px' }}>
-        {loading ? (
+        {selectedSO ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div 
+              onClick={() => setSelectedSO(null)}
+              style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--text-secondary)', cursor: 'pointer', marginBottom: '8px', fontWeight: '500' }}
+            >
+              <ChevronLeft size={20} />
+              Kembali ke Antrean
+            </div>
+            
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Sales Order</div>
+                <div className="text-xl" style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{selectedSO.orderNumber}</div>
+              </div>
+              
+              <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Pelanggan</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '500', color: 'var(--text-primary)', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                  <MapPin size={16} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+                  {selectedSO.customerInfo?.name || '-'}
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Tanggal Pesanan</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '500', color: 'var(--text-primary)' }}>
+                  <Calendar size={16} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+                  {selectedSO.transactionDate ? new Date(selectedSO.transactionDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-'}
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '8px' }}>Barang</div>
+                
+                <div style={{ 
+                  backgroundColor: 'rgba(0, 0, 0, 0.02)',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-color)',
+                  overflow: 'hidden'
+                }}>
+                  <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    padding: '12px', 
+                    borderBottom: '1px solid var(--border-color)',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    color: 'var(--text-secondary)',
+                    backgroundColor: 'var(--bg-secondary)'
+                  }}>
+                    <div>NAMA BARANG</div>
+                    <div>QTY</div>
+                  </div>
+                  
+                  {parseItemsSummary(selectedSO.itemsSummary).length > 0 ? (
+                    parseItemsSummary(selectedSO.itemsSummary).map((item, idx, arr) => (
+                      <div key={idx} style={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'flex-start',
+                        padding: '12px', 
+                        borderBottom: idx < arr.length - 1 ? '1px solid var(--border-color)' : 'none',
+                        fontSize: '14px',
+                        gap: '12px'
+                      }}>
+                        <div style={{ 
+                          fontWeight: '500', 
+                          color: 'var(--text-primary)', 
+                          wordBreak: 'break-word', 
+                          overflowWrap: 'anywhere',
+                          lineHeight: '1.4'
+                        }}>
+                          {item.name}
+                        </div>
+                        <div style={{ 
+                          fontWeight: '600', 
+                          color: 'var(--text-primary)',
+                          flexShrink: 0
+                        }}>
+                          {item.qty}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{ padding: '16px 12px', fontSize: '14px', color: 'var(--text-muted)', textAlign: 'center' }}>
+                      Detail barang belum tersedia.
+                    </div>
+                  )}
+                  
+                  {selectedSO.totalItems && (
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      padding: '12px', 
+                      borderTop: '2px solid var(--border-color)',
+                      fontSize: '14px',
+                      fontWeight: '700',
+                      color: 'var(--text-primary)',
+                      backgroundColor: 'var(--bg-secondary)'
+                    }}>
+                      <div>Total Barang</div>
+                      <div>{selectedSO.totalItems}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ padding: '8px 4px', color: 'var(--text-secondary)', fontSize: '14px', textAlign: 'center' }}>
+              Sales Order ini akan dibuat menjadi Delivery Note sebelum barang bisa dipicking.
+            </div>
+
+            <button 
+              className="btn btn-primary"
+              disabled={loading}
+              onClick={() => handleCreateDN(selectedSO.orderNumber)}
+              style={{ width: '100%', padding: '16px', fontSize: '16px' }}
+            >
+              {loading ? 'Membuat Delivery Note...' : 'Buat Delivery Note'}
+            </button>
+          </div>
+        ) : selectedDN ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div 
+              onClick={() => setSelectedDN(null)}
+              style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--text-secondary)', cursor: 'pointer', marginBottom: '8px', fontWeight: '500' }}
+            >
+              <ChevronLeft size={20} />
+              Kembali
+            </div>
+            
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Delivery Note</div>
+                <div className="text-xl" style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{selectedDN.deliveryNoteNo}</div>
+              </div>
+              
+              <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Sales Order</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '500', color: 'var(--text-primary)', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                  <ClipboardList size={16} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+                  {selectedDN.salesOrderNo || '-'}
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Customer</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '500', color: 'var(--text-primary)', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                  <MapPin size={16} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+                  {selectedDN.customer || '-'}
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Tanggal</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '500', color: 'var(--text-primary)' }}>
+                  <Calendar size={16} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+                  {selectedDN.postingDate ? new Date(selectedDN.postingDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-'}
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Status</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '500', color: 'var(--text-primary)' }}>
+                  {selectedDN.status || '-'}
+                </div>
+              </div>
+
+              {selectedDN.poNo && (
+                <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                  <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '4px' }}>PO</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '500', color: 'var(--text-primary)' }}>
+                    {selectedDN.poNo}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '8px' }}>Barang</div>
+                
+                <div style={{ 
+                  backgroundColor: 'rgba(0, 0, 0, 0.02)',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-color)',
+                  overflow: 'hidden'
+                }}>
+                  <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    padding: '12px', 
+                    borderBottom: '1px solid var(--border-color)',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    color: 'var(--text-secondary)',
+                    backgroundColor: 'var(--bg-secondary)'
+                  }}>
+                    <div>NAMA BARANG</div>
+                    <div>QTY</div>
+                  </div>
+                  
+                  {selectedDN.items && selectedDN.items.length > 0 ? (
+                    selectedDN.items.map((item, idx, arr) => (
+                      <div key={idx} style={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'flex-start',
+                        padding: '12px', 
+                        borderBottom: idx < arr.length - 1 ? '1px solid var(--border-color)' : 'none',
+                        fontSize: '14px',
+                        gap: '12px'
+                      }}>
+                        <div style={{ 
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '2px',
+                          minWidth: 0
+                        }}>
+                          <div style={{ 
+                            fontWeight: '500', 
+                            color: 'var(--text-primary)', 
+                            wordBreak: 'break-word', 
+                            overflowWrap: 'anywhere',
+                            lineHeight: '1.4'
+                          }}>
+                            {item.itemName || item.itemCode}
+                          </div>
+                          {(item.itemCode || item.warehouse) && (
+                            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                              {item.itemCode}{item.itemCode && item.warehouse ? ' • ' : ''}{item.warehouse}
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ 
+                          fontWeight: '600', 
+                          color: 'var(--text-primary)',
+                          flexShrink: 0,
+                          marginTop: '2px'
+                        }}>
+                          {item.orderedQty}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{ padding: '16px 12px', fontSize: '14px', color: 'var(--text-muted)', textAlign: 'center' }}>
+                      Delivery Note tidak memiliki barang.
+                    </div>
+                  )}
+                  
+                  {selectedDN.items && (
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      padding: '12px', 
+                      borderTop: '2px solid var(--border-color)',
+                      fontSize: '14px',
+                      fontWeight: '700',
+                      color: 'var(--text-primary)',
+                      backgroundColor: 'var(--bg-secondary)'
+                    }}>
+                      <div>Total Barang</div>
+                      <div>{selectedDN.items.reduce((sum, i) => sum + (i.orderedQty || 0), 0)}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ padding: '8px 4px', color: 'var(--text-secondary)', fontSize: '14px', textAlign: 'center' }}>
+              Periksa barang dan jumlah sebelum mulai picking.
+            </div>
+
+            <button 
+              className="btn btn-primary"
+              onClick={() => {
+                selectDeliveryNote(selectedDN);
+                navigate('/picking');
+              }}
+              style={{ width: '100%', padding: '16px', fontSize: '16px' }}
+            >
+              Mulai Picking
+            </button>
+          </div>
+        ) : loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', padding: '32px' }}>
             <div style={{ width: '32px', height: '32px', borderRadius: '50%', border: '3px solid var(--border-color)', borderTopColor: 'var(--accent-primary)', animation: 'spin 1s linear infinite' }} />
             <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
           </div>
-        ) : errorState ? (
-          <div className="card text-center text-danger" style={{ color: 'var(--error-color)' }}>
-            <p>{errorState}</p>
-          </div>
         ) : activeTab === 'pending' ? (
-          filteredOrders.length === 0 ? (
-            <div className="card text-center text-muted">
-              <p>Belum ada antrean pesanan baru.</p>
-            </div>
-          ) : (
+          <>
+            {ordersError ? (
+              <div className="card text-center text-danger" style={{ padding: '32px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+                <div>
+                  <h3 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>Gagal Memuat Antrean</h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>{ordersError}</p>
+                </div>
+                <button 
+                  className="btn btn-primary" 
+                  onClick={() => fetchOrders()}
+                  style={{ padding: '8px 24px', fontSize: '14px' }}
+                >
+                  Coba Lagi
+                </button>
+              </div>
+            ) : (
+              <>
+              <div style={{ padding: '0 4px 16px 4px', color: 'var(--text-secondary)', fontSize: '14px' }}>
+                Ada {filteredOrders.length} pesanan baru. Tekan tombol <strong>Buat Delivery Note</strong> untuk memproses pesanan.
+              </div>
+            {filteredOrders.length === 0 ? (
+              <div className="card text-center text-muted" style={{ padding: '32px 16px' }}>
+                <ClipboardList size={48} style={{ opacity: 0.2, margin: '0 auto 16px auto' }} />
+                <p style={{ fontWeight: '500', color: 'var(--text-primary)', marginBottom: '4px' }}>Antrean Kosong</p>
+                <p style={{ fontSize: '14px' }}>Saat ini belum ada antrean pesanan baru yang masuk.</p>
+              </div>
+            ) : (
             filteredOrders.map(order => (
               <div 
                 key={order.orderNumber} 
                 className="card" 
-                onClick={() => handleCreateDN(order.orderNumber)}
+                onClick={() => setSelectedSO(order)}
                 style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '12px' }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -137,12 +461,10 @@ const Home = () => {
                     borderRadius: 'var(--radius-md)',
                     fontSize: '13px',
                     fontWeight: '600',
-                    backgroundColor: 'var(--accent-gradient)',
-                    background: 'var(--accent-gradient)',
-                    color: 'white',
-                    boxShadow: 'var(--shadow-sm)'
+                    color: 'var(--accent-primary)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)'
                   }}>
-                    Buat Delivery Note
+                    Lihat Detail
                   </div>
                 </div>
                 
@@ -156,22 +478,47 @@ const Home = () => {
                     </div>
                   )}
                   
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', minWidth: 0, flex: 1 }}>
                     <Package size={14} style={{ flexShrink: 0 }} />
-                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, display: 'block', flex: 1 }}>
                       {order.totalItems} Items — {order.itemsSummary}
                     </span>
                   </div>
                 </div>
               </div>
             ))
-          )
+            )}
+              </>
+            )}
+          </>
         ) : (
-          filteredDNs.length === 0 ? (
-            <div className="card text-center text-muted">
-              <p>Belum ada Delivery Note yang siap dipicking.</p>
+          <>
+            {dnError ? (
+              <div className="card text-center text-danger" style={{ padding: '32px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+                <div>
+                  <h3 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>Gagal Memuat Delivery Note</h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>{dnError}</p>
+                </div>
+                <button 
+                  className="btn btn-primary" 
+                  onClick={() => fetchDeliveryNotes()}
+                  style={{ padding: '8px 24px', fontSize: '14px' }}
+                >
+                  Coba Lagi
+                </button>
+              </div>
+            ) : (
+              <>
+            <div style={{ padding: '0 4px 16px 4px', color: 'var(--text-secondary)', fontSize: '14px' }}>
+              Ada {filteredDNs.length} pesanan siap diproses. Pilih pesanan dan tekan <strong>Mulai Picking</strong> untuk mengambil barang.
             </div>
-          ) : (
+            {filteredDNs.length === 0 ? (
+              <div className="card text-center text-muted" style={{ padding: '32px 16px' }}>
+                <Truck size={48} style={{ opacity: 0.2, margin: '0 auto 16px auto' }} />
+                <p style={{ fontWeight: '500', color: 'var(--text-primary)', marginBottom: '4px' }}>Tidak Ada Pekerjaan</p>
+                <p style={{ fontSize: '14px' }}>Belum ada Delivery Note yang siap di-picking. Buat Delivery Note dari Antrean SO terlebih dahulu.</p>
+              </div>
+            ) : (
             filteredDNs.map(dn => (
               <div 
                 key={dn.deliveryNoteNo} 
@@ -179,11 +526,11 @@ const Home = () => {
                 onClick={() => handleSelectDN(dn)}
                 style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '12px' }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', minWidth: 0 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
                     <span className="text-lg" style={{ marginBottom: '4px' }}>{dn.deliveryNoteNo}</span>
                     {dn.customer && (
-                      <span style={{ fontSize: '15px', fontWeight: '500', color: 'var(--text-primary)' }}>
+                      <span style={{ fontSize: '15px', fontWeight: '500', color: 'var(--text-primary)', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                         {dn.customer}
                       </span>
                     )}
@@ -210,17 +557,19 @@ const Home = () => {
                   borderRadius: 'var(--radius-md)',
                   fontSize: '14px',
                   fontWeight: '600',
-                  backgroundColor: 'var(--bg-primary)',
                   color: 'var(--accent-primary)',
-                  border: '1px solid var(--border-color)',
+                  backgroundColor: 'rgba(59, 130, 246, 0.1)',
                   textAlign: 'center',
                   transition: 'background-color var(--transition-fast)'
                 }}>
-                  Mulai Picking
+                  Lihat Detail
                 </div>
               </div>
             ))
-          )
+            )}
+              </>
+            )}
+          </>
         )}
       </div>
     </div>

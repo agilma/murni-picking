@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { Home, QrCode, LogOut } from 'lucide-react';
+import { Home, QrCode, LogOut, Settings } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const AppShell = () => {
@@ -58,6 +58,18 @@ const AppShell = () => {
         >
           <QrCode size={20} />
           <span>Pickup</span>
+        </NavLink>
+
+        <NavLink 
+          to="/settings" 
+          style={({ isActive }) => ({
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
+            color: isActive ? 'var(--accent-primary)' : 'var(--text-muted)',
+            textDecoration: 'none', fontSize: '12px', fontWeight: '500'
+          })}
+        >
+          <Settings size={20} />
+          <span>Pengaturan</span>
         </NavLink>
 
         <button 

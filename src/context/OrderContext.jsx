@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { getDeliveryNotes as apiGetDeliveryNotes, createDeliveryNoteFromSalesOrder, submitDeliveryNotePicking } from '../api/deliveryNote';
 import { getPendingSalesOrders } from '../api/salesOrder';
+import { parseApiError } from '../utils/errorHandler';
+import { useAuth } from './AuthContext';
 
 const OrderContext = createContext(null);
 
@@ -8,11 +10,13 @@ const OrderContext = createContext(null);
 export const useOrders = () => useContext(OrderContext);
 
 export const OrderProvider = ({ children }) => {
+  const { isAuthenticated } = useAuth();
   const [orders, setOrders] = useState([]); // Pending SOs
   const [deliveryNotes, setDeliveryNotes] = useState([]); // DNs
   const [activeOrder, setActiveOrder] = useState(null); // Selected DN for picking
   const [loading, setLoading] = useState(false);
-  const [errorState, setErrorState] = useState(null);
+  const [ordersError, setOrdersError] = useState(null);
+  const [dnError, setDnError] = useState(null);
   const [activeOrderError, setActiveOrderError] = useState(null);
   const [toast, setToast] = useState(null);
 
@@ -23,7 +27,7 @@ export const OrderProvider = ({ children }) => {
 
   const fetchOrders = async () => {
     setLoading(true);
-    setErrorState(null);
+    setOrdersError(null);
     try {
       const data = await getPendingSalesOrders();
       if (data) {
@@ -36,9 +40,8 @@ export const OrderProvider = ({ children }) => {
         }));
         setOrders(mappedOrders);
       }
-    } catch {
-      setErrorState('Gagal memuat antrean pesanan.');
-      showToast('Gagal memuat daftar pesanan.', 'error');
+    } catch (err) {
+      setOrdersError(parseApiError(err, 'Data Sales Order tidak dapat dimuat.'));
       setOrders([]); 
     } finally {
       setLoading(false);
@@ -47,7 +50,7 @@ export const OrderProvider = ({ children }) => {
 
   const fetchDeliveryNotes = async () => {
     setLoading(true);
-    setErrorState(null);
+    setDnError(null);
     try {
       const data = await apiGetDeliveryNotes('', 1, 20); // List general
       if (data) {
@@ -70,9 +73,8 @@ export const OrderProvider = ({ children }) => {
         }));
         setDeliveryNotes(mappedDNs);
       }
-    } catch {
-      setErrorState('Gagal memuat daftar Delivery Note.');
-      showToast('Gagal memuat Delivery Note.', 'error');
+    } catch (err) {
+      setDnError(parseApiError(err, 'Data Delivery Note tidak dapat dimuat.'));
       setDeliveryNotes([]);
     } finally {
       setLoading(false);
@@ -80,9 +82,16 @@ export const OrderProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    fetchOrders();
-    fetchDeliveryNotes();
-  }, []);
+    if (isAuthenticated) {
+      fetchOrders();
+      fetchDeliveryNotes();
+    } else {
+      setOrders([]);
+      setDeliveryNotes([]);
+      setOrdersError(null);
+      setDnError(null);
+    }
+  }, [isAuthenticated]);
 
   const createDN = async (orderNumber) => {
     setLoading(true);
@@ -95,8 +104,8 @@ export const OrderProvider = ({ children }) => {
         await fetchOrders();
         return true;
       }
-    } catch {
-      showToast('Gagal membuat Delivery Note.', 'error');
+    } catch (err) {
+      showToast('Delivery Note belum berhasil dibuat. Silakan coba lagi.', 'error');
     } finally {
       setLoading(false);
     }
@@ -173,7 +182,7 @@ export const OrderProvider = ({ children }) => {
       fetchDeliveryNotes(); // Refresh list
       return true;
     } catch {
-      showToast('Gagal menyimpan progress picking.', 'error');
+      showToast('Data picking belum berhasil dikirim ke server. Silakan coba lagi.', 'error');
       return false;
     } finally {
       setLoading(false);
@@ -186,7 +195,8 @@ export const OrderProvider = ({ children }) => {
       deliveryNotes,
       activeOrder,
       loading,
-      errorState,
+      ordersError,
+      dnError,
       activeOrderError,
       selectOrder,
       createDN,

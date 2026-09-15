@@ -39,6 +39,7 @@ const Picking = () => {
   const [productSearch, setProductSearch] = useState('');
   const [pickupLater, setPickupLater] = useState(false); // New state for Pickup Mode
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [scanFeedback, setScanFeedback] = useState(null);
 
   // This input captures simulated barcode scans (typing + enter) for prototype purposes
   const handleBarcodeSubmit = (e) => {
@@ -47,8 +48,18 @@ const Picking = () => {
     if (barcode) {
       // Check if it's a valid scan that will be accepted
       const item = activeOrder?.items.find(i => i.itemCode === barcode);
-      if (item && item.pickedQty < item.orderedQty) {
-        playSuccessBeep();
+      if (item) {
+        if (item.pickedQty < item.orderedQty) {
+          playSuccessBeep();
+          setScanFeedback('✓ Barang berhasil dipindai');
+          setTimeout(() => setScanFeedback(null), 2000);
+        } else {
+          setScanFeedback('Jumlah barang ini sudah sesuai.');
+          setTimeout(() => setScanFeedback(null), 2000);
+        }
+      } else {
+        setScanFeedback('Kode barang ini tidak ada di Delivery Note.');
+        setTimeout(() => setScanFeedback(null), 2000);
       }
       
       scanProduct(barcode);
@@ -102,6 +113,7 @@ const Picking = () => {
 
   const isFullyPicked = activeOrder.items.every(i => i.pickedQty === i.orderedQty);
   const completedItemsCount = activeOrder.items.filter(i => i.pickedQty === i.orderedQty).length;
+  const progressPercent = activeOrder.items.length > 0 ? (completedItemsCount / activeOrder.items.length) * 100 : 0;
   
   const filteredItems = activeOrder.items.filter(item => 
     item.itemName.toLowerCase().includes(productSearch.toLowerCase()) || 
@@ -110,14 +122,26 @@ const Picking = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
-      <div className="header">
-        <div className="header-row">
-          <button className="icon-btn" onClick={handleBack} aria-label="Kembali">
+      <div className="header" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div className="header-row" style={{ alignItems: 'flex-start' }}>
+          <button className="icon-btn" onClick={handleBack} aria-label="Kembali" style={{ marginTop: '-4px' }}>
             <ChevronLeft size={24} />
           </button>
-          <div style={{ flexGrow: 1 }}>
-            <h1 className="text-lg">{activeOrder.deliveryNoteNo}</h1>
-            <span className="text-muted" style={{ fontSize: '14px' }}>SO: {activeOrder.salesOrderNo} | {activeOrder.customer}</span>
+          <div style={{ flexGrow: 1, minWidth: 0 }}>
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Picking</div>
+            <h1 className="text-xl" style={{ fontWeight: '700', margin: '2px 0 4px 0' }}>{activeOrder.deliveryNoteNo}</h1>
+            <div style={{ fontSize: '14px', fontWeight: '500', color: 'var(--text-primary)', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{activeOrder.customer}</div>
+            <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>SO: {activeOrder.salesOrderNo}</div>
+          </div>
+        </div>
+        
+        <div style={{ marginTop: '8px', padding: '12px', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', fontWeight: '500' }}>
+            <span>Progress Picking</span>
+            <span>{completedItemsCount} dari {activeOrder.items.length} selesai</span>
+          </div>
+          <div style={{ width: '100%', height: '6px', backgroundColor: 'var(--border-color)', borderRadius: '3px', overflow: 'hidden' }}>
+            <div style={{ width: `${progressPercent}%`, height: '100%', backgroundColor: 'var(--success-color)', transition: 'width 0.3s ease' }} />
           </div>
         </div>
       </div>
@@ -157,11 +181,28 @@ const Picking = () => {
         </form>
       </div>
 
-      <div style={{ padding: '12px 16px', backgroundColor: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ padding: '12px 16px', backgroundColor: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative' }}>
         <span style={{ fontWeight: '600', fontSize: '14px' }}>Daftar Barang</span>
-        <span style={{ fontSize: '13px', color: 'var(--text-secondary)', backgroundColor: 'var(--bg-primary)', padding: '4px 8px', borderRadius: '4px' }}>
-          {completedItemsCount} dari {activeOrder.items.length} selesai
-        </span>
+        
+        {scanFeedback && (
+          <div style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            backgroundColor: 'var(--text-primary)',
+            color: 'var(--bg-primary)',
+            padding: '6px 12px',
+            borderRadius: '16px',
+            fontSize: '12px',
+            fontWeight: '600',
+            whiteSpace: 'nowrap',
+            zIndex: 10,
+            boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+          }}>
+            {scanFeedback}
+          </div>
+        )}
       </div>
 
       <div className="flex-grow" style={{ overflowY: 'auto' }}>
@@ -169,32 +210,100 @@ const Picking = () => {
           const isCompleted = item.pickedQty === item.orderedQty;
           
           return (
-            <div key={item.itemCode} className={`product-item ${isCompleted ? 'completed' : 'incomplete'}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '12px' }}>
-              <div className="product-info" style={{ width: '100%' }}>
-                <span className="product-name">{item.itemName}</span>
-                <span className="product-status">SKU: {item.itemCode} | {item.warehouse}</span>
+            <div key={item.itemCode} style={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              gap: '12px',
+              padding: '16px',
+              borderBottom: '1px solid var(--border-color)',
+              backgroundColor: isCompleted ? 'var(--bg-secondary)' : 'var(--bg-primary)',
+              transition: 'background-color 0.2s'
+            }}>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                <div style={{ 
+                  marginTop: '2px', 
+                  color: isCompleted ? 'var(--success-color)' : 'transparent',
+                  flexShrink: 0
+                }}>
+                  <Check size={18} strokeWidth={3} />
+                </div>
+                <div style={{ flexGrow: 1, minWidth: 0, opacity: isCompleted ? 0.7 : 1 }}>
+                  <div style={{ 
+                    fontWeight: '600', 
+                    fontSize: '15px', 
+                    color: 'var(--text-primary)',
+                    wordBreak: 'break-word',
+                    overflowWrap: 'anywhere',
+                    lineHeight: '1.4',
+                    marginBottom: '4px'
+                  }}>
+                    {item.itemName}
+                  </div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                    {item.itemCode}
+                  </div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                    {item.warehouse}
+                  </div>
+                </div>
               </div>
               
-              <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end' }}>
-                <div className="qty-controls">
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '16px',
+                  backgroundColor: 'var(--bg-secondary)',
+                  padding: '4px 8px',
+                  borderRadius: '24px',
+                  border: '1px solid var(--border-color)'
+                }}>
                   <button 
-                    className="qty-btn" 
                     onClick={() => updateQuantity(item.itemCode, -1)}
                     disabled={item.pickedQty === 0}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '50%',
+                      border: 'none',
+                      backgroundColor: item.pickedQty === 0 ? 'transparent' : 'var(--bg-elevated)',
+                      color: item.pickedQty === 0 ? 'var(--text-muted)' : 'var(--text-primary)',
+                      cursor: item.pickedQty === 0 ? 'not-allowed' : 'pointer'
+                    }}
                   >
                     <Minus size={20} />
                   </button>
-                  <div className="qty-value">
-                    <span style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-primary)' }}>{item.pickedQty}</span>
-                    <span style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '0 4px' }}>/</span>
-                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500' }}>{item.orderedQty}</span>
+                  
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', minWidth: '48px', justifyContent: 'center' }}>
+                    <span style={{ fontSize: '18px', fontWeight: '700', color: isCompleted ? 'var(--success-color)' : 'var(--text-primary)' }}>
+                      {item.pickedQty}
+                    </span>
+                    <span style={{ fontSize: '14px', color: 'var(--text-muted)' }}>/</span>
+                    <span style={{ fontSize: '14px', color: 'var(--text-muted)', fontWeight: '500' }}>
+                      {item.orderedQty}
+                    </span>
                   </div>
+                  
                   <button 
-                    className="qty-btn" 
                     onClick={() => updateQuantity(item.itemCode, 1)}
                     disabled={item.pickedQty >= item.orderedQty}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '50%',
+                      border: 'none',
+                      backgroundColor: item.pickedQty >= item.orderedQty ? 'transparent' : 'var(--bg-elevated)',
+                      color: item.pickedQty >= item.orderedQty ? 'var(--text-muted)' : 'var(--text-primary)',
+                      cursor: item.pickedQty >= item.orderedQty ? 'not-allowed' : 'pointer'
+                    }}
                   >
-                    {isCompleted ? <Check size={20} color="var(--success-color)" /> : <Plus size={20} />}
+                    <Plus size={20} />
                   </button>
                 </div>
               </div>
@@ -204,42 +313,59 @@ const Picking = () => {
       </div>
 
       <div className="sticky-bottom" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <div className="selectable-card-container">
-          <div 
-            className={`selectable-card ${!pickupLater ? 'active' : ''}`}
-            onClick={() => setPickupLater(false)}
-          >
-            <div className="selectable-card-title">
-              {!pickupLater && <Check size={16} />}
-              Ambil Sekarang
+        <div style={{ padding: '0 4px' }}>
+          <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px', color: 'var(--text-primary)' }}>Cara Pengambilan</div>
+          <div className="selectable-card-container">
+            <div 
+              className={`selectable-card ${!pickupLater ? 'active' : ''}`}
+              onClick={() => setPickupLater(false)}
+            >
+              <div className="selectable-card-title">
+                {!pickupLater && <Check size={16} />}
+                Ambil Sekarang
+              </div>
+              <div className="selectable-card-desc">Barang diambil sekarang</div>
             </div>
-            <div className="selectable-card-desc">Pesanan siap untuk diambil sekarang.</div>
-          </div>
-          <div 
-            className={`selectable-card ${pickupLater ? 'active' : ''}`}
-            onClick={() => setPickupLater(true)}
-          >
-            <div className="selectable-card-title">
-              {pickupLater && <Check size={16} />}
-              Ambil Nanti
+            <div 
+              className={`selectable-card ${pickupLater ? 'active' : ''}`}
+              onClick={() => setPickupLater(true)}
+            >
+              <div className="selectable-card-title">
+                {pickupLater && <Check size={16} />}
+                Ambil Nanti
+              </div>
+              <div className="selectable-card-desc">Pelanggan mengambil nanti</div>
             </div>
-            <div className="selectable-card-desc">Pesanan akan disiapkan untuk diambil nanti.</div>
           </div>
         </div>
 
         <button 
-          className="btn btn-primary" 
+          className={`btn ${isFullyPicked ? 'btn-primary' : 'btn-secondary'}`} 
           onClick={handleComplete}
           disabled={!isFullyPicked || isSubmitting}
-          style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
+          style={{ 
+            width: '100%', 
+            display: 'flex', 
+            justifyContent: 'center', 
+            alignItems: 'center', 
+            gap: '8px',
+            padding: '16px',
+            fontSize: '15px',
+            opacity: (!isFullyPicked && !isSubmitting) ? 1 : undefined,
+            backgroundColor: (!isFullyPicked && !isSubmitting) ? 'var(--bg-secondary)' : undefined,
+            color: (!isFullyPicked && !isSubmitting) ? 'var(--text-muted)' : undefined,
+            border: (!isFullyPicked && !isSubmitting) ? '1px solid var(--border-color)' : undefined
+          }}
         >
           {isSubmitting ? (
             <>
               <div style={{ width: '20px', height: '20px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'white', animation: 'spin 1s linear infinite' }} />
-              Menyimpan...
+              Menyelesaikan Picking...
             </>
+          ) : !isFullyPicked ? (
+            'Selesaikan jumlah barang terlebih dahulu'
           ) : (
-            'Selesai Ambil Barang'
+            'Selesaikan Picking'
           )}
         </button>
       </div>

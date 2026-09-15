@@ -30,7 +30,11 @@ const Login = () => {
     if (result.success) {
       navigate(from, { replace: true });
     } else {
-      setError(result.error || 'Login gagal. Silakan periksa kembali kredensial Anda.');
+      let errorMsg = 'Username atau password tidak sesuai.';
+      if (result.error && (result.error.status === 0 || result.error.message?.toLowerCase().includes('fetch'))) {
+        errorMsg = 'Tidak dapat terhubung ke server. Periksa koneksi lalu coba lagi.';
+      }
+      setError(errorMsg);
       setIsSubmitting(false);
     }
   };
