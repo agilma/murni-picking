@@ -29,7 +29,8 @@ const Home = () => {
   const [activeTab, setActiveTab] = useState('pending'); // 'pending' | 'dn'
   const [selectedSO, setSelectedSO] = useState(null); // Local state for Detail SO
   const [selectedDN, setSelectedDN] = useState(null); // Local state for Detail DN
-  const { orders, deliveryNotes, createDN, selectDeliveryNote, loading, ordersError, dnError, fetchOrders, fetchDeliveryNotes } = useOrders();
+  const [showLastPickedModal, setShowLastPickedModal] = useState(false);
+  const { orders, deliveryNotes, createDN, selectDeliveryNote, loading, ordersError, dnError, fetchOrders, fetchDeliveryNotes, lastPickedOrder, setLastPickedOrder } = useOrders();
   const navigate = useNavigate();
 
   const handleCreateDN = async (orderNumber) => {
@@ -80,6 +81,91 @@ const Home = () => {
           Scan QR Pickup Pelanggan
         </button>
       </div>
+
+      {lastPickedOrder && (
+        <div style={{ padding: '16px 16px 0 16px' }}>
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            backgroundColor: 'var(--bg-elevated)', 
+            border: '1px solid var(--border-color)', 
+            borderRadius: '8px',
+            padding: '12px'
+          }}>
+            <div>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Picking Terakhir</div>
+              <div style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{lastPickedOrder.name}</div>
+            </div>
+            <button 
+              className="btn btn-secondary" 
+              style={{ padding: '6px 12px', fontSize: '14px' }}
+              onClick={() => setShowLastPickedModal(true)}
+            >
+              Lihat
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showLastPickedModal && lastPickedOrder && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 9999,
+          padding: '24px'
+        }}>
+          <div style={{
+            backgroundColor: 'var(--bg-primary)',
+            borderRadius: '12px',
+            padding: '24px',
+            width: '100%',
+            maxWidth: '360px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
+          }}>
+            <h3 style={{ margin: 0, color: 'var(--text-primary)', textAlign: 'center' }}>Picking Terakhir</h3>
+            
+            <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+              <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Sales Order</div>
+              <div style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{lastPickedOrder.name}</div>
+            </div>
+            
+            <div>
+              <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Customer</div>
+              <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>{lastPickedOrder.customer || '-'}</div>
+            </div>
+
+            {lastPickedOrder.customPickupLater === 1 && (
+              <div style={{ marginTop: '8px', border: '2px solid var(--border-color)', padding: '16px', borderRadius: '8px', textAlign: 'center', backgroundColor: 'var(--bg-secondary)' }}>
+                <p className="text-secondary" style={{ fontSize: '14px', marginBottom: '8px' }}>PICKUP CODE</p>
+                {lastPickedOrder.customPickUpCode ? (
+                  <>
+                    <h1 style={{ fontSize: '32px', margin: '0 0 12px 0', color: 'var(--text-primary)', letterSpacing: '2px' }}>{lastPickedOrder.customPickUpCode}</h1>
+                    <p className="text-secondary" style={{ fontSize: '14px', margin: 0 }}>Tulis kode ini pada paper bag.</p>
+                  </>
+                ) : (
+                  <p className="text-secondary" style={{ fontSize: '14px', margin: 0, color: 'var(--error-color)' }}>Pickup code belum tersedia.</p>
+                )}
+              </div>
+            )}
+            
+            <button 
+              className="btn btn-secondary" 
+              onClick={() => setShowLastPickedModal(false)}
+              style={{ marginTop: '8px' }}
+            >
+              Tutup
+            </button>
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'flex', padding: '16px 16px 0 16px', gap: '8px' }}>
         <button 

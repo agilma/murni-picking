@@ -19,6 +19,14 @@ export const OrderProvider = ({ children }) => {
   const [dnError, setDnError] = useState(null);
   const [activeOrderError, setActiveOrderError] = useState(null);
   const [toast, setToast] = useState(null);
+  const [lastPickedOrder, setLastPickedOrder] = useState(() => {
+    try {
+      const saved = localStorage.getItem('lastPickedOrder');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
 
   const showToast = (message, type = 'error') => {
     setToast({ message, type });
@@ -61,6 +69,8 @@ export const OrderProvider = ({ children }) => {
           postingDate: item.posting_date,
           status: item.status,
           poNo: item.po_no,
+          customPickupLater: item.custom_pickup_later,
+          customPickUpCode: item.custom_pick_up_code,
           items: item.items ? item.items.map(i => ({
             itemCode: i.item_code,
             itemName: i.item_name,
@@ -176,11 +186,21 @@ export const OrderProvider = ({ children }) => {
         qty: item.pickedQty
       }));
       
-      await submitDeliveryNotePicking(activeOrder.deliveryNoteNo, updatedItems, pickupLater);
+      const submitRes = await submitDeliveryNotePicking(activeOrder.deliveryNoteNo, updatedItems, pickupLater);
+      
+      const newLastPicked = {
+        name: activeOrder.deliveryNoteNo,
+        customer: activeOrder.customer,
+        customPickupLater: pickupLater ? 1 : 0,
+        customPickUpCode: submitRes?.custom_pick_up_code || activeOrder.customPickUpCode || null
+      };
+      
+      setLastPickedOrder(newLastPicked);
+      localStorage.setItem('lastPickedOrder', JSON.stringify(newLastPicked));
       
       showToast('Picking selesai.', 'success');
       fetchDeliveryNotes(); // Refresh list
-      return true;
+      return newLastPicked;
     } catch {
       showToast('Data picking belum berhasil dikirim ke server. Silakan coba lagi.', 'error');
       return false;
@@ -207,7 +227,9 @@ export const OrderProvider = ({ children }) => {
       completeOrder,
       fetchOrders,
       fetchDeliveryNotes,
-      toast
+      toast,
+      lastPickedOrder,
+      setLastPickedOrder
     }}>
       {children}
     </OrderContext.Provider>

@@ -74,13 +74,19 @@ const Picking = () => {
 
   const handleComplete = async () => {
     setIsSubmitting(true);
-    const success = await completeOrder(pickupLater);
+    const result = await completeOrder(pickupLater);
     setIsSubmitting(false);
-    if (success) {
+    if (result) {
       // For now navigate to success. If pickupNow needs to go to /pickup, adjust logic here.
       // E.g., if (!pickupLater) navigate('/pickup'); else navigate('/success');
       // Keeping it simple and going to success page:
-      navigate('/success', { state: { orderId: activeOrder.deliveryNoteNo, type: pickupLater ? 'PICKUP_LATER' : 'PICKUP_NOW' } });
+      navigate('/success', { 
+        state: { 
+          orderId: activeOrder.deliveryNoteNo, 
+          type: pickupLater ? 'PICKUP_LATER' : 'PICKUP_NOW',
+          customPickUpCode: result.customPickUpCode
+        } 
+      });
     }
   };
 

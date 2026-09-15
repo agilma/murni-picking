@@ -8,7 +8,7 @@ const Success = () => {
   const location = useLocation();
   const { clearActiveOrder } = useOrders();
   
-  const { orderId, type } = location.state || {};
+  const { orderId, type, customPickUpCode } = location.state || {};
 
   useEffect(() => {
     // Clear active order context when reaching success page
@@ -45,6 +45,20 @@ const Success = () => {
       
       <h2 className="text-xl mb-4" style={{ color: 'var(--success-color)' }}>{title}</h2>
       <p className="text-primary mb-2">Order <strong>#{orderId}</strong></p>
+
+      {type === 'PICKUP_LATER' && (
+        <div style={{ marginTop: '24px', marginBottom: '16px', border: '2px solid var(--border-color)', padding: '16px', borderRadius: '8px', width: '100%', maxWidth: '320px', backgroundColor: 'var(--bg-secondary)' }}>
+          <p className="text-secondary" style={{ fontSize: '14px', marginBottom: '8px' }}>PICKUP CODE</p>
+          {customPickUpCode ? (
+            <>
+              <h1 style={{ fontSize: '32px', margin: '0 0 12px 0', color: 'var(--text-primary)', letterSpacing: '2px' }}>{customPickUpCode}</h1>
+              <p className="text-secondary" style={{ fontSize: '14px', margin: 0 }}>Tulis kode ini pada paper bag.</p>
+            </>
+          ) : (
+            <p className="text-secondary" style={{ fontSize: '14px', margin: 0, color: 'var(--error-color)' }}>Pickup code belum tersedia. Silakan coba buka kembali detail order.</p>
+          )}
+        </div>
+      )}
       
       <div style={{ marginTop: '40px', width: '100%', maxWidth: '320px' }}>
         <button className="btn btn-primary" onClick={() => navigate('/')} style={{ width: '100%' }}>
