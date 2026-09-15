@@ -46,4 +46,3 @@ jobs:
 
           git commit -m "chore: update build output [skip ci]"
           git push origin HEAD:${GITHUB_REF_NAME}
-```
