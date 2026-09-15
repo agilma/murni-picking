@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOrders } from '../context/OrderContext';
-import { ChevronLeft, Check, Minus, Plus, Maximize, Search } from 'lucide-react';
+import { ChevronLeft, Check, Minus, Plus, Search, CameraOff, AlertCircle } from 'lucide-react';
+import { Html5Qrcode } from 'html5-qrcode';
 
 const playSuccessBeep = () => {
   try {
@@ -37,34 +38,42 @@ const Picking = () => {
   const navigate = useNavigate();
   const [barcodeInput, setBarcodeInput] = useState('');
   const [productSearch, setProductSearch] = useState('');
-  const [pickupLater, setPickupLater] = useState(false); // New state for Pickup Mode
+  const [pickupLater, setPickupLater] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [scanFeedback, setScanFeedback] = useState(null);
+  
+  const [cameraState, setCameraState] = useState('initializing'); // initializing, active, error
+  const [cameraErrorMsg, setCameraErrorMsg] = useState('');
+  const [submitError, setSubmitError] = useState(false);
 
   // This input captures simulated barcode scans (typing + enter) for prototype purposes
   const handleBarcodeSubmit = (e) => {
     e.preventDefault();
     const barcode = barcodeInput.trim();
     if (barcode) {
-      // Check if it's a valid scan that will be accepted
-      const item = activeOrder?.items.find(i => i.itemCode === barcode);
-      if (item) {
-        if (item.pickedQty < item.orderedQty) {
-          playSuccessBeep();
-          setScanFeedback('✓ Barang berhasil dipindai');
-          setTimeout(() => setScanFeedback(null), 2000);
-        } else {
-          setScanFeedback('Jumlah barang ini sudah sesuai.');
-          setTimeout(() => setScanFeedback(null), 2000);
-        }
-      } else {
-        setScanFeedback('Kode barang ini tidak ada di Delivery Note.');
-        setTimeout(() => setScanFeedback(null), 2000);
-      }
-      
-      scanProduct(barcode);
+      processScan(barcode);
       setBarcodeInput('');
     }
+  };
+
+  const processScan = (barcode) => {
+    if (!activeOrder) return;
+    const item = activeOrder.items.find(i => i.itemCode === barcode);
+    if (item) {
+      if (item.pickedQty < item.orderedQty) {
+        playSuccessBeep();
+        setScanFeedback('✓ Barang berhasil dipindai');
+        setTimeout(() => setScanFeedback(null), 2000);
+      } else {
+        setScanFeedback('Jumlah barang ini sudah sesuai.');
+        setTimeout(() => setScanFeedback(null), 2000);
+      }
+    } else {
+      setScanFeedback('Kode barang ini tidak ada di Delivery Note.');
+      setTimeout(() => setScanFeedback(null), 2000);
+    }
+    
+    scanProduct(barcode);
   };
 
   const handleBack = () => {
@@ -73,13 +82,14 @@ const Picking = () => {
   };
 
   const handleComplete = async () => {
+    if (isSubmitting) return;
     setIsSubmitting(true);
+    setSubmitError(false);
+    
     const result = await completeOrder(pickupLater);
     setIsSubmitting(false);
+    
     if (result) {
-      // For now navigate to success. If pickupNow needs to go to /pickup, adjust logic here.
-      // E.g., if (!pickupLater) navigate('/pickup'); else navigate('/success');
-      // Keeping it simple and going to success page:
       navigate('/success', { 
         state: { 
           orderId: activeOrder.deliveryNoteNo, 
@@ -87,10 +97,66 @@ const Picking = () => {
           customPickUpCode: result.customPickUpCode
         } 
       });
+    } else {
+      setSubmitError(true);
     }
   };
 
-  if (loading) {
+  useEffect(() => {
+    let html5QrCode;
+    let isUnmounted = false;
+
+    if (!activeOrder || activeOrderError || loading) return;
+
+    const startScanner = async () => {
+      try {
+        html5QrCode = new Html5Qrcode("picking-reader");
+        await html5QrCode.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: { width: 250, height: 250 },
+            aspectRatio: 1.0,
+          },
+          (decodedText) => {
+            if (!isUnmounted) {
+              const barcode = decodedText.trim();
+              if (barcode) {
+                processScan(barcode);
+              }
+            }
+          },
+          () => {
+            // ignore constant scanning errors
+          }
+        );
+        if (!isUnmounted) {
+          setCameraState('active');
+        }
+      } catch (err) {
+        if (!isUnmounted) {
+          setCameraState('error');
+          setCameraErrorMsg('Kamera tidak dapat digunakan. Silakan izinkan akses kamera dari browser.');
+        }
+      }
+    };
+
+    startScanner();
+
+    return () => {
+      isUnmounted = true;
+      if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.stop().then(() => {
+          html5QrCode.clear();
+        }).catch(err => {
+          console.error("Failed to stop scanner", err);
+        });
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeOrder?.deliveryNoteNo]); // Only re-init when order changes, not on every render
+
+  if (loading && !activeOrder) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
         <div style={{ width: '40px', height: '40px', borderRadius: '50%', border: '3px solid var(--border-color)', borderTopColor: 'var(--accent-primary)', animation: 'spin 1s linear infinite' }} />
@@ -128,38 +194,81 @@ const Picking = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
-      <div className="header" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        <div className="header-row" style={{ alignItems: 'flex-start' }}>
-          <button className="icon-btn" onClick={handleBack} aria-label="Kembali" style={{ marginTop: '-4px' }}>
+      {/* HEADER SECTION */}
+      <div className="header" style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button 
+            className="icon-btn" 
+            onClick={handleBack} 
+            aria-label="Kembali" 
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: '44px', minHeight: '44px' }}
+          >
             <ChevronLeft size={24} />
           </button>
           <div style={{ flexGrow: 1, minWidth: 0 }}>
-            <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Picking</div>
-            <h1 className="text-xl" style={{ fontWeight: '700', margin: '2px 0 4px 0' }}>{activeOrder.deliveryNoteNo}</h1>
-            <div style={{ fontSize: '14px', fontWeight: '500', color: 'var(--text-primary)', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{activeOrder.customer}</div>
-            <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>SO: {activeOrder.salesOrderNo}</div>
-          </div>
-        </div>
-        
-        <div style={{ marginTop: '8px', padding: '12px', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', fontWeight: '500' }}>
-            <span>Progress Picking</span>
-            <span>{completedItemsCount} dari {activeOrder.items.length} selesai</span>
-          </div>
-          <div style={{ width: '100%', height: '6px', backgroundColor: 'var(--border-color)', borderRadius: '3px', overflow: 'hidden' }}>
-            <div style={{ width: `${progressPercent}%`, height: '100%', backgroundColor: 'var(--success-color)', transition: 'width 0.3s ease' }} />
+            <h1 className="text-xl" style={{ fontWeight: '700', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              Mulai Picking
+            </h1>
+            <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
+              {activeOrder.deliveryNoteNo}
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="scanner-container">
-        {/* Placeholder for camera feed in prototype */}
-        <div style={{ position: 'absolute', color: 'white', zIndex: 2, textAlign: 'center' }}>
-          <Maximize size={48} style={{ opacity: 0.5, marginBottom: '8px' }} />
-          <p style={{ fontSize: '14px', opacity: 0.8 }}>Kamera Scanner Aktif</p>
+      {/* PROGRESS SECTION */}
+      <div style={{ padding: '16px', backgroundColor: 'var(--bg-elevated)', borderBottom: '1px solid var(--border-color)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>
+          <span>Picking Progress</span>
+          <span>{completedItemsCount} / {activeOrder.items.length} item</span>
         </div>
-        <div className="scanner-overlay" />
-        <div className="scan-line" />
+        <div style={{ width: '100%', height: '8px', backgroundColor: 'var(--border-color)', borderRadius: '4px', overflow: 'hidden', position: 'relative' }}>
+          <div style={{ width: `${progressPercent}%`, height: '100%', backgroundColor: 'var(--success-color)', transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)' }} />
+        </div>
+        <div style={{ textAlign: 'right', fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px', fontWeight: '500' }}>
+          {Math.round(progressPercent)}%
+        </div>
+        {isFullyPicked ? (
+          <div style={{ textAlign: 'center', color: 'var(--success-color)', fontSize: '14px', fontWeight: '600', marginTop: '12px' }}>
+            Picking Selesai
+          </div>
+        ) : (
+          <div style={{ textAlign: 'center', color: 'var(--text-primary)', fontSize: '14px', fontWeight: '500', marginTop: '12px' }}>
+            Scan item berikutnya
+          </div>
+        )}
+      </div>
+
+      {/* CAMERA SCANNER SECTION */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px', backgroundColor: '#000', position: 'relative' }}>
+        <div 
+          id="picking-reader" 
+          style={{ 
+            width: '100%', 
+            maxWidth: '400px',
+            aspectRatio: '1', 
+            backgroundColor: '#111', 
+            borderRadius: '12px', 
+            overflow: 'hidden',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            position: 'relative'
+          }}
+        >
+          {cameraState === 'initializing' && (
+            <div style={{ color: 'white', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+              <div style={{ width: '24px', height: '24px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'white', animation: 'spin 1s linear infinite' }} />
+              <span style={{ fontSize: '14px' }}>Menyiapkan kamera...</span>
+            </div>
+          )}
+          {cameraState === 'error' && (
+            <div style={{ color: '#ef4444', textAlign: 'center', padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+              <CameraOff size={32} />
+              <span style={{ fontSize: '14px' }}>{cameraErrorMsg}</span>
+            </div>
+          )}
+        </div>
       </div>
       
       {/* Search and hidden input for scanner simulation */}
@@ -319,6 +428,28 @@ const Picking = () => {
       </div>
 
       <div className="sticky-bottom" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        {submitError && (
+          <div style={{ 
+            backgroundColor: 'rgba(239, 68, 68, 0.1)', 
+            border: '1px solid var(--error-color)',
+            borderRadius: '8px',
+            padding: '12px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px'
+          }}>
+            <AlertCircle size={20} color="var(--error-color)" style={{ flexShrink: 0, marginTop: '2px' }} />
+            <div style={{ flexGrow: 1 }}>
+              <div style={{ color: 'var(--error-color)', fontWeight: '600', fontSize: '14px', marginBottom: '4px' }}>
+                Gagal menyimpan Delivery Note.
+              </div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
+                Silakan coba lagi.
+              </div>
+            </div>
+          </div>
+        )}
+
         <div style={{ padding: '0 4px' }}>
           <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px', color: 'var(--text-primary)' }}>Cara Pengambilan</div>
           <div className="selectable-card-container">
@@ -366,12 +497,14 @@ const Picking = () => {
           {isSubmitting ? (
             <>
               <div style={{ width: '20px', height: '20px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'white', animation: 'spin 1s linear infinite' }} />
-              Menyelesaikan Picking...
+              Menyimpan...
             </>
+          ) : submitError ? (
+            'Coba Lagi'
           ) : !isFullyPicked ? (
             'Selesaikan jumlah barang terlebih dahulu'
           ) : (
-            'Selesaikan Picking'
+            'Submit Delivery Note'
           )}
         </button>
       </div>
