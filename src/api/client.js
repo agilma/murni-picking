@@ -24,6 +24,13 @@ export const apiClient = {
     });
   },
 
+  async put(endpoint, body = {}) {
+    return this.request(endpoint, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    });
+  },
+
   async get(endpoint, params = {}) {
     const urlParams = new URLSearchParams(params).toString();
     const query = urlParams ? `?${urlParams}` : '';

@@ -1,12 +1,19 @@
 import React, { useState } from 'react';
 
 const ManualPickupCode = ({ onSubmit, onCancel }) => {
-  const [code, setCode] = useState('MURNI-PICKUP:VALID-001');
+  const [code, setCode] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (code.trim()) {
-      onSubmit(code.trim());
+    const cleanCode = code.trim();
+    if (!cleanCode || isSubmitting) return;
+
+    setIsSubmitting(true);
+    try {
+      await onSubmit(cleanCode);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -20,14 +27,22 @@ const ManualPickupCode = ({ onSubmit, onCancel }) => {
           placeholder="MURNI-XXXXXX"
           value={code}
           onChange={(e) => setCode(e.target.value)}
+          disabled={isSubmitting}
           autoFocus
         />
         <div style={{ display: 'flex', gap: '12px' }}>
-          <button type="button" className="btn btn-secondary" onClick={onCancel} style={{ flex: 1 }}>
+          <button type="button" className="btn btn-secondary" onClick={onCancel} style={{ flex: 1 }} disabled={isSubmitting}>
             Batal
           </button>
-          <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={!code.trim()}>
-            Cek Kode
+          <button type="submit" className="btn btn-primary" style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }} disabled={!code.trim() || isSubmitting}>
+            {isSubmitting ? (
+              <>
+                <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'white', animation: 'spin 1s linear infinite' }} />
+                Mengecek...
+              </>
+            ) : (
+              'Cek Kode'
+            )}
           </button>
         </div>
       </form>

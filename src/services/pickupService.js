@@ -1,13 +1,11 @@
-import { getSalesInvoice, markSalesInvoicePickedUp } from '../api/salesInvoice';
+import { getSalesInvoice, updateSalesInvoicePickedUp } from '../api/salesInvoice';
 
 export const parsePickupQr = (rawCode) => {
-  // Format is MURNI-PICKUP:INVOICE_NAME or just INVOICE_NAME if we fall back
   if (!rawCode || typeof rawCode !== 'string') return null;
   const parts = rawCode.split(':');
   if (parts.length === 2 && parts[0] === 'MURNI-PICKUP') {
     return parts[1];
   }
-  // Assume it might just be the Sales Invoice name
   return rawCode;
 };
 
@@ -48,17 +46,20 @@ export const validatePickupQr = async (code) => {
       }
     };
   } catch {
-    // If API returns 404
     return { status: 'invalid' };
   }
 };
 
 export const confirmPickup = async (orderId) => {
+  if (!orderId) {
+    return { success: false, error: 'Sales Invoice name missing' };
+  }
+
   try {
-    await markSalesInvoicePickedUp(orderId);
+    await updateSalesInvoicePickedUp(orderId);
     return { success: true };
   } catch (error) {
-    return { success: false, error: error.message };
+    return { success: false, error: error.message || 'Terjadi kesalahan saat memproses pickup' };
   }
 };
 

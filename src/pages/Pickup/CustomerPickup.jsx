@@ -8,11 +8,12 @@ import PickupOrderCard from './PickupOrderCard';
 
 const CustomerPickup = () => {
   const navigate = useNavigate();
-  const [pickupState, setPickupState] = useState('idle'); // idle, scanning, manual-code, processing, order-found, invalid, expired, already-picked-up, confirmation, success, camera-error
+  const [pickupState, setPickupState] = useState('idle'); // idle, scanning, manual-code, processing, order-found, invalid, expired, already-picked-up, confirmation, success, camera-error, confirm-error
   const [pickupOrder, setPickupOrder] = useState(null);
+  const [confirmError, setConfirmError] = useState('');
 
   const handleBack = () => {
-    if (['scanning', 'manual-code', 'invalid', 'expired', 'already-picked-up', 'camera-error'].includes(pickupState)) {
+    if (['scanning', 'manual-code', 'invalid', 'expired', 'already-picked-up', 'camera-error', 'confirm-error'].includes(pickupState)) {
       setPickupState('idle');
     } else if (pickupState === 'order-found' || pickupState === 'confirmation') {
       setPickupState('idle');
@@ -22,8 +23,10 @@ const CustomerPickup = () => {
     }
   };
 
-  const processCode = async (code) => {
-    setPickupState('processing');
+  const processCode = async (code, isManual = false) => {
+    if (!isManual) {
+      setPickupState('processing');
+    }
     try {
       const result = await validatePickupQr(code);
       if (result.status === 'success') {
@@ -41,7 +44,7 @@ const CustomerPickup = () => {
   };
 
   const handleScanSuccess = (code) => {
-    processCode(code);
+    processCode(code, false);
   };
 
   const handleConfirmPickup = async () => {
@@ -50,8 +53,13 @@ const CustomerPickup = () => {
 
   const executeConfirm = async () => {
     setPickupState('processing');
-    await confirmPickup(pickupOrder.orderId);
-    navigate('/success', { state: { orderId: pickupOrder.orderId, type: 'DINE_IN' } });
+    const response = await confirmPickup(pickupOrder.orderId);
+    if (response.success) {
+      navigate('/success', { state: { orderId: pickupOrder.orderId, type: 'DINE_IN' } });
+    } else {
+      setConfirmError(response.error || 'Terjadi kesalahan jaringan.');
+      setPickupState('confirm-error');
+    }
   };
 
   return (
@@ -140,7 +148,7 @@ const CustomerPickup = () => {
 
         {/* MANUAL CODE STATE */}
         {pickupState === 'manual-code' && (
-          <ManualPickupCode onSubmit={processCode} onCancel={() => setPickupState('idle')} />
+          <ManualPickupCode onSubmit={(code) => processCode(code, true)} onCancel={() => setPickupState('idle')} />
         )}
 
         {/* PROCESSING STATE */}
@@ -218,6 +226,25 @@ const CustomerPickup = () => {
                   Batal
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* CONFIRM ERROR STATE */}
+        {pickupState === 'confirm-error' && (
+          <div style={{ padding: '24px', flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', gap: '24px' }}>
+            <AlertCircle size={64} color="var(--error-color)" />
+            <div>
+              <h2 className="text-lg mb-2">Gagal Mengupdate Pickup</h2>
+              <p className="text-secondary">{confirmError}</p>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', maxWidth: '320px' }}>
+              <button className="btn btn-primary" onClick={executeConfirm}>
+                Coba Lagi
+              </button>
+              <button className="btn btn-secondary" onClick={() => setPickupState('idle')}>
+                Kembali
+              </button>
             </div>
           </div>
         )}
