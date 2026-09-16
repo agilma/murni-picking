@@ -1,12 +1,13 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { CheckCircle } from 'lucide-react';
+import { CheckCircle, Copy, Check } from 'lucide-react';
 import { useOrders } from '../context/OrderContext';
 
 const Success = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { clearActiveOrder } = useOrders();
+  const [copied, setCopied] = useState(false);
 
   const { orderId, type, customPickUpCode } = location.state || {};
 
@@ -14,6 +15,21 @@ const Success = () => {
     // Clear active order context when reaching success page
     clearActiveOrder();
   }, [clearActiveOrder]);
+
+  const handleCopyPickupCode = async () => {
+    if (!customPickUpCode) return;
+
+    try {
+      await navigator.clipboard.writeText(customPickUpCode);
+      setCopied(true);
+
+      setTimeout(() => {
+        setCopied(false);
+      }, 2000);
+    } catch (error) {
+      console.error('Failed to copy pickup code:', error);
+    }
+  };
 
   if (!orderId) {
     // Fallback if accessed directly
@@ -49,7 +65,50 @@ const Success = () => {
       {type === 'PICKUP_LATER' && (
         <div style={{ marginTop: '24px', marginBottom: '16px', border: '2px solid var(--border-color)', padding: '16px', borderRadius: '8px', width: '100%', maxWidth: '320px', backgroundColor: 'var(--bg-secondary)' }}>
           <p className="text-secondary" style={{ fontSize: '14px', marginBottom: '8px' }}>PICKUP CODE</p>
-          {customPickUpCode ? (<> <h1 style={{ fontSize: '22px', fontWeight: '700', margin: '0 0 12px 0', color: 'var(--text-primary)', letterSpacing: '2px', lineHeight: '1.2' }} > {customPickUpCode} </h1> <p className="text-secondary" style={{ fontSize: '14px', margin: 0 }} > Tulis kode ini pada paper bag. </p> </>) : (<p className="text-secondary" style={{ fontSize: '14px', margin: 0, color: 'var(--error-color)' }} > Pickup code belum tersedia. Silakan coba buka kembali detail order. </p>)}
+          {customPickUpCode ? (<> <h1 style={{ fontSize: '22px', fontWeight: '700', margin: '0 0 12px 0', color: 'var(--text-primary)', letterSpacing: '2px', lineHeight: '1.2' }} > {customPickUpCode} </h1> <p className="text-secondary" style={{ fontSize: '14px', margin: 0 }} > Tulis kode ini pada paper bag. </p> </>) : (<p className="text-secondary" style={{ fontSize: '14px', margin: 0, color: 'var(--error-color)' }} > Kode pickup belum tersedia. </p>)}
+        </div>
+      )}
+
+      {type === 'PICKUP_NOW' && (
+        <div style={{ marginTop: '24px', marginBottom: '16px', border: '2px solid var(--border-color)', padding: '16px', borderRadius: '8px', width: '100%', maxWidth: '320px', backgroundColor: 'var(--bg-secondary)' }}>
+          <p className="text-secondary" style={{ fontSize: '14px', marginBottom: '8px' }}>Pickup Code</p>
+          {customPickUpCode ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '12px' }}>
+                <h1 style={{ fontSize: '22px', fontWeight: '700', margin: '0', color: 'var(--text-primary)', letterSpacing: '2px', lineHeight: '1.2', wordBreak: 'break-all' }}>
+                  {customPickUpCode}
+                </h1>
+                <button 
+                  onClick={handleCopyPickupCode}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid var(--border-color)',
+                    backgroundColor: copied ? 'var(--success-bg)' : 'var(--bg-elevated)',
+                    color: copied ? 'var(--success-color)' : 'var(--text-primary)',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    transition: 'all 0.2s ease',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {copied ? <Check size={16} /> : <Copy size={16} />}
+                  {copied ? 'Tersalin' : 'Copy'}
+                </button>
+              </div>
+              <p className="text-secondary" style={{ fontSize: '14px', margin: 0 }}>
+                Kode ini digunakan saat pengambilan pesanan.
+              </p>
+            </>
+          ) : (
+            <p className="text-secondary" style={{ fontSize: '14px', margin: 0, color: 'var(--error-color)' }}>
+              Kode pickup belum tersedia.
+            </p>
+          )}
         </div>
       )}
 
