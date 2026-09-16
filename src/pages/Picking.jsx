@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOrders } from '../context/OrderContext';
 import { ChevronLeft, Check, Minus, Plus, Search, CameraOff, AlertCircle } from 'lucide-react';
@@ -45,6 +45,9 @@ const Picking = () => {
   const [cameraState, setCameraState] = useState('initializing'); // initializing, active, error
   const [cameraErrorMsg, setCameraErrorMsg] = useState('');
   const [submitError, setSubmitError] = useState(false);
+  
+  const scannerRef = useRef(null);
+  const scannerContainerRef = useRef(null);
 
   // This input captures simulated barcode scans (typing + enter) for prototype purposes
   const handleBarcodeSubmit = (e) => {
@@ -103,14 +106,17 @@ const Picking = () => {
   };
 
   useEffect(() => {
-    let html5QrCode;
     let isUnmounted = false;
 
     if (!activeOrder || activeOrderError || loading) return;
+    
+    if (scannerRef.current) return;
 
     const startScanner = async () => {
       try {
-        html5QrCode = new Html5Qrcode("picking-reader");
+        const html5QrCode = new Html5Qrcode("picking-reader");
+        scannerRef.current = html5QrCode;
+        
         await html5QrCode.start(
           { facingMode: "environment" },
           {
@@ -130,7 +136,16 @@ const Picking = () => {
             // ignore constant scanning errors
           }
         );
-        if (!isUnmounted) {
+        
+        if (isUnmounted) {
+          if (html5QrCode.isScanning) {
+            html5QrCode.stop().then(() => {
+              try { html5QrCode.clear(); } catch(e) { console.error("Scanner clear error", e); }
+            }).catch(console.error);
+          } else {
+            try { html5QrCode.clear(); } catch(e) { console.error("Scanner clear error", e); }
+          }
+        } else {
           setCameraState('active');
         }
       } catch (err) {
@@ -145,12 +160,20 @@ const Picking = () => {
 
     return () => {
       isUnmounted = true;
-      if (html5QrCode && html5QrCode.isScanning) {
-        html5QrCode.stop().then(() => {
-          html5QrCode.clear();
-        }).catch(err => {
-          console.error("Failed to stop scanner", err);
-        });
+      if (scannerRef.current) {
+        const html5QrCode = scannerRef.current;
+        scannerRef.current = null;
+        
+        if (html5QrCode.isScanning) {
+          html5QrCode.stop().then(() => {
+            try { html5QrCode.clear(); } catch(e) { console.error("Scanner clear error", e); }
+          }).catch(err => {
+            console.error("Failed to stop scanner", err);
+            try { html5QrCode.clear(); } catch(e) { console.error("Scanner clear error", e); }
+          });
+        } else {
+          try { html5QrCode.clear(); } catch(e) { console.error("Scanner clear error", e); }
+        }
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -241,8 +264,24 @@ const Picking = () => {
 
       {/* CAMERA SCANNER SECTION */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px', backgroundColor: '#000', position: 'relative' }}>
+        
+        {/* Render loading/error OUTSIDE the scanner container */}
+        {cameraState === 'initializing' && (
+          <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'white', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', zIndex: 10 }}>
+            <div style={{ width: '24px', height: '24px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'white', animation: 'spin 1s linear infinite' }} />
+            <span style={{ fontSize: '14px' }}>Menyiapkan kamera...</span>
+          </div>
+        )}
+        {cameraState === 'error' && (
+          <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: '#ef4444', textAlign: 'center', padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', zIndex: 10 }}>
+            <CameraOff size={32} />
+            <span style={{ fontSize: '14px' }}>{cameraErrorMsg}</span>
+          </div>
+        )}
+
         <div 
           id="picking-reader" 
+          ref={scannerContainerRef}
           style={{ 
             width: '100%', 
             maxWidth: '400px',
@@ -253,22 +292,11 @@ const Picking = () => {
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
-            position: 'relative'
+            position: 'relative',
+            opacity: cameraState === 'active' ? 1 : 0,
+            transition: 'opacity 0.3s ease'
           }}
-        >
-          {cameraState === 'initializing' && (
-            <div style={{ color: 'white', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-              <div style={{ width: '24px', height: '24px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'white', animation: 'spin 1s linear infinite' }} />
-              <span style={{ fontSize: '14px' }}>Menyiapkan kamera...</span>
-            </div>
-          )}
-          {cameraState === 'error' && (
-            <div style={{ color: '#ef4444', textAlign: 'center', padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-              <CameraOff size={32} />
-              <span style={{ fontSize: '14px' }}>{cameraErrorMsg}</span>
-            </div>
-          )}
-        </div>
+        />
       </div>
       
       {/* Search and hidden input for scanner simulation */}
