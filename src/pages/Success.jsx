@@ -7,7 +7,7 @@ const Success = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { clearActiveOrder } = useOrders();
-  
+
   const { orderId, type, customPickUpCode } = location.state || {};
 
   useEffect(() => {
@@ -28,44 +28,37 @@ const Success = () => {
   const title = type === 'DINE_IN' ? 'Pickup Completed' : 'Picking Completed';
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
-      height: '100vh', 
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100vh',
       backgroundColor: 'var(--bg-primary)',
-      justifyContent: 'center', 
-      alignItems: 'center', 
-      textAlign: 'center', 
+      justifyContent: 'center',
+      alignItems: 'center',
+      textAlign: 'center',
       padding: '24px',
-      animation: 'fadeIn 0.5s ease-out' 
+      animation: 'fadeIn 0.5s ease-out'
     }}>
       <div style={{ animation: 'scaleIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)', marginBottom: '24px' }}>
         <CheckCircle size={80} color="var(--success-color)" />
       </div>
-      
+
       <h2 className="text-xl mb-4" style={{ color: 'var(--success-color)' }}>{title}</h2>
       <p className="text-primary mb-2">Order <strong>#{orderId}</strong></p>
 
       {type === 'PICKUP_LATER' && (
         <div style={{ marginTop: '24px', marginBottom: '16px', border: '2px solid var(--border-color)', padding: '16px', borderRadius: '8px', width: '100%', maxWidth: '320px', backgroundColor: 'var(--bg-secondary)' }}>
           <p className="text-secondary" style={{ fontSize: '14px', marginBottom: '8px' }}>PICKUP CODE</p>
-          {customPickUpCode ? (
-            <>
-              <h1 style={{ fontSize: '32px', margin: '0 0 12px 0', color: 'var(--text-primary)', letterSpacing: '2px' }}>{customPickUpCode}</h1>
-              <p className="text-secondary" style={{ fontSize: '14px', margin: 0 }}>Tulis kode ini pada paper bag.</p>
-            </>
-          ) : (
-            <p className="text-secondary" style={{ fontSize: '14px', margin: 0, color: 'var(--error-color)' }}>Pickup code belum tersedia. Silakan coba buka kembali detail order.</p>
-          )}
+          {customPickUpCode ? (<> <h1 style={{ fontSize: '22px', fontWeight: '700', margin: '0 0 12px 0', color: 'var(--text-primary)', letterSpacing: '2px', lineHeight: '1.2' }} > {customPickUpCode} </h1> <p className="text-secondary" style={{ fontSize: '14px', margin: 0 }} > Tulis kode ini pada paper bag. </p> </>) : (<p className="text-secondary" style={{ fontSize: '14px', margin: 0, color: 'var(--error-color)' }} > Pickup code belum tersedia. Silakan coba buka kembali detail order. </p>)}
         </div>
       )}
-      
+
       <div style={{ marginTop: '40px', width: '100%', maxWidth: '320px' }}>
         <button className="btn btn-primary" onClick={() => navigate('/')} style={{ width: '100%' }}>
           Process Next Order
         </button>
       </div>
-      
+
       <style>{`
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes scaleIn { from { transform: scale(0); } to { transform: scale(1); } }
