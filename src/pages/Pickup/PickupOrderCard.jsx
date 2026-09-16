@@ -1,6 +1,6 @@
 import React from 'react';
 
-const PickupOrderCard = ({ order, onConfirm, onCancel }) => {
+const PickupOrderCard = ({ order, onConfirm, onCancel, isConfirming }) => {
   if (!order) return null;
 
   return (
@@ -51,10 +51,15 @@ const PickupOrderCard = ({ order, onConfirm, onCancel }) => {
       </div>
 
       <div className="sticky-bottom" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <button className="btn btn-primary" onClick={onConfirm}>
-          Konfirmasi Pickup
+        <button className="btn btn-primary" onClick={onConfirm} disabled={isConfirming}>
+          {isConfirming ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'white', animation: 'spin 1s linear infinite' }} />
+              Memproses...
+            </div>
+          ) : 'PICK UP'}
         </button>
-        <button className="btn btn-secondary" onClick={onCancel} style={{ border: 'none', background: 'transparent' }}>
+        <button className="btn btn-secondary" onClick={onCancel} style={{ border: 'none', background: 'transparent' }} disabled={isConfirming}>
           Batal
         </button>
       </div>

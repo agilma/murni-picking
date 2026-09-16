@@ -8,9 +8,10 @@ import PickupOrderCard from './PickupOrderCard';
 
 const CustomerPickup = () => {
   const navigate = useNavigate();
-  const [pickupState, setPickupState] = useState('idle'); // idle, scanning, manual-code, processing, order-found, invalid, expired, already-picked-up, confirmation, success, camera-error, confirm-error
+  const [pickupState, setPickupState] = useState('idle'); // idle, scanning, manual-code, processing, order-found, invalid, expired, already-picked-up, confirm-error
   const [pickupOrder, setPickupOrder] = useState(null);
   const [confirmError, setConfirmError] = useState('');
+  const [isConfirming, setIsConfirming] = useState(false);
 
   const handleBack = () => {
     if (['scanning', 'manual-code', 'invalid', 'expired', 'already-picked-up', 'camera-error', 'confirm-error'].includes(pickupState)) {
@@ -48,17 +49,22 @@ const CustomerPickup = () => {
   };
 
   const handleConfirmPickup = async () => {
-    setPickupState('confirmation');
+    executeConfirm();
   };
 
   const executeConfirm = async () => {
-    setPickupState('processing');
-    const response = await confirmPickup(pickupOrder.orderId);
+    setIsConfirming(true);
+    const response = await confirmPickup(pickupOrder.pickupCode);
     if (response.success) {
       navigate('/success', { state: { orderId: pickupOrder.orderId, type: 'DINE_IN' } });
     } else {
-      setConfirmError(response.error || 'Terjadi kesalahan jaringan.');
-      setPickupState('confirm-error');
+      setIsConfirming(false);
+      if (response.status === 'already-picked-up') {
+        setPickupState('already-picked-up');
+      } else {
+        setConfirmError(response.error || 'Terjadi kesalahan jaringan.');
+        setPickupState('confirm-error');
+      }
     }
   };
 
@@ -166,6 +172,7 @@ const CustomerPickup = () => {
             order={pickupOrder} 
             onConfirm={handleConfirmPickup} 
             onCancel={() => setPickupState('idle')} 
+            isConfirming={isConfirming}
           />
         )}
 
@@ -212,23 +219,6 @@ const CustomerPickup = () => {
           </div>
         )}
 
-        {/* CONFIRMATION STATE */}
-        {pickupState === 'confirmation' && (
-          <div style={{ padding: '24px', flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', gap: '24px' }}>
-            <div className="card" style={{ padding: '32px 24px', display: 'flex', flexDirection: 'column', gap: '16px', width: '100%', maxWidth: '320px' }}>
-              <h2 className="text-lg">Konfirmasi Pickup</h2>
-              <p className="text-secondary" style={{ marginBottom: '16px' }}>Pastikan pesanan sudah diterima oleh customer.</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <button className="btn btn-primary" onClick={executeConfirm}>
-                  Konfirmasi
-                </button>
-                <button className="btn btn-secondary" onClick={() => setPickupState('order-found')} style={{ border: 'none', background: 'transparent' }}>
-                  Batal
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* CONFIRM ERROR STATE */}
         {pickupState === 'confirm-error' && (

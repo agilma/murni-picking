@@ -24,3 +24,18 @@ export const updateSalesInvoicePickedUp = async (name) => {
   });
   return response.data;
 };
+
+/**
+ * Get sales invoices by custom_pick_up_code
+ * @param {string} code - Pickup code
+ * @returns {Promise<Array>} Resolves with array of matching sales invoices
+ */
+export const getSalesInvoicesByPickupCode = async (code) => {
+  if (!code) throw new Error('Pickup code is required');
+  const response = await apiClient.get('/api/resource/Sales Invoice', {
+    filters: JSON.stringify([["Sales Invoice", "custom_pick_up_code", "=", code]]),
+    fields: JSON.stringify(["name", "custom_picked_up"]),
+    limit_page_length: 10 // Get up to 10 to check for duplicates
+  });
+  return response.data || [];
+};
