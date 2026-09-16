@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOrders } from '../context/OrderContext';
-import { ChevronLeft, Check, Minus, Plus, Search, CameraOff, AlertCircle } from 'lucide-react';
+import { ChevronLeft, Check, Minus, Plus, Search, CameraOff, AlertCircle, Camera, X } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 
 const playSuccessBeep = () => {
@@ -45,6 +45,7 @@ const Picking = () => {
   const [cameraState, setCameraState] = useState('initializing'); // initializing, active, error
   const [cameraErrorMsg, setCameraErrorMsg] = useState('');
   const [submitError, setSubmitError] = useState(false);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
   
   const scannerRef = useRef(null);
   const scannerContainerRef = useRef(null);
@@ -67,6 +68,7 @@ const Picking = () => {
         playSuccessBeep();
         setScanFeedback('✓ Barang berhasil dipindai');
         setTimeout(() => setScanFeedback(null), 2000);
+        setIsScannerOpen(false); // Close modal on successful item match
       } else {
         setScanFeedback('Jumlah barang ini sudah sesuai.');
         setTimeout(() => setScanFeedback(null), 2000);
@@ -110,7 +112,27 @@ const Picking = () => {
 
     if (!activeOrder || activeOrderError || loading) return;
     
+    if (!isScannerOpen) {
+      if (scannerRef.current) {
+        const html5QrCode = scannerRef.current;
+        scannerRef.current = null;
+        if (html5QrCode.isScanning) {
+          html5QrCode.stop().then(() => {
+            try { html5QrCode.clear(); } catch(e) {}
+          }).catch(() => {
+            try { html5QrCode.clear(); } catch(e) {}
+          });
+        } else {
+          try { html5QrCode.clear(); } catch(e) {}
+        }
+      }
+      return;
+    }
+    
     if (scannerRef.current) return;
+
+    setCameraState('initializing');
+    setCameraErrorMsg('');
 
     const startScanner = async () => {
       try {
@@ -137,13 +159,13 @@ const Picking = () => {
           }
         );
         
-        if (isUnmounted) {
+        if (isUnmounted || !isScannerOpen) {
           if (html5QrCode.isScanning) {
             html5QrCode.stop().then(() => {
-              try { html5QrCode.clear(); } catch(e) { console.error("Scanner clear error", e); }
+              try { html5QrCode.clear(); } catch(e) {}
             }).catch(console.error);
           } else {
-            try { html5QrCode.clear(); } catch(e) { console.error("Scanner clear error", e); }
+            try { html5QrCode.clear(); } catch(e) {}
           }
         } else {
           setCameraState('active');
@@ -166,18 +188,17 @@ const Picking = () => {
         
         if (html5QrCode.isScanning) {
           html5QrCode.stop().then(() => {
-            try { html5QrCode.clear(); } catch(e) { console.error("Scanner clear error", e); }
+            try { html5QrCode.clear(); } catch(e) {}
           }).catch(err => {
-            console.error("Failed to stop scanner", err);
-            try { html5QrCode.clear(); } catch(e) { console.error("Scanner clear error", e); }
+            try { html5QrCode.clear(); } catch(e) {}
           });
         } else {
-          try { html5QrCode.clear(); } catch(e) { console.error("Scanner clear error", e); }
+          try { html5QrCode.clear(); } catch(e) {}
         }
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeOrder?.deliveryNoteNo]); // Only re-init when order changes, not on every render
+  }, [activeOrder?.deliveryNoteNo, isScannerOpen]); // Re-init based on isScannerOpen
 
   if (loading && !activeOrder) {
     return (
@@ -262,41 +283,17 @@ const Picking = () => {
         )}
       </div>
 
-      {/* CAMERA SCANNER SECTION */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px', backgroundColor: '#000', position: 'relative' }}>
-        
-        {/* Render loading/error OUTSIDE the scanner container */}
-        {cameraState === 'initializing' && (
-          <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'white', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', zIndex: 10 }}>
-            <div style={{ width: '24px', height: '24px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'white', animation: 'spin 1s linear infinite' }} />
-            <span style={{ fontSize: '14px' }}>Menyiapkan kamera...</span>
-          </div>
-        )}
-        {cameraState === 'error' && (
-          <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: '#ef4444', textAlign: 'center', padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', zIndex: 10 }}>
-            <CameraOff size={32} />
-            <span style={{ fontSize: '14px' }}>{cameraErrorMsg}</span>
-          </div>
-        )}
-
-        <div 
-          id="picking-reader" 
-          ref={scannerContainerRef}
-          style={{ 
-            width: '100%', 
-            maxWidth: '400px',
-            aspectRatio: '1', 
-            backgroundColor: '#111', 
-            borderRadius: '12px', 
-            overflow: 'hidden',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            position: 'relative',
-            opacity: cameraState === 'active' ? 1 : 0,
-            transition: 'opacity 0.3s ease'
-          }}
-        />
+      {/* CAMERA SCANNER BUTTON */}
+      <div style={{ padding: '16px', backgroundColor: 'var(--bg-primary)', display: 'flex', justifyContent: 'center' }}>
+        <button 
+          className="btn btn-primary" 
+          onClick={() => setIsScannerOpen(true)}
+          disabled={isFullyPicked}
+          style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', padding: '14px', fontSize: '15px' }}
+        >
+          <Camera size={20} />
+          Scan Item dengan Kamera
+        </button>
       </div>
       
       {/* Search and hidden input for scanner simulation */}
@@ -536,6 +533,65 @@ const Picking = () => {
           )}
         </button>
       </div>
+
+      {/* MODAL SCANNER */}
+      {isScannerOpen && (
+        <div style={{ 
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+          backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 9999, 
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center'
+        }}>
+          <div style={{ width: '100%', maxWidth: '400px', display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px' }}>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'white' }}>
+              <h2 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>Scan Barcode</h2>
+              <button 
+                onClick={() => setIsScannerOpen(false)}
+                style={{ background: 'none', border: 'none', color: 'white', display: 'flex', padding: '8px', cursor: 'pointer' }}
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div style={{ position: 'relative', width: '100%', aspectRatio: '1', backgroundColor: '#111', borderRadius: '12px', overflow: 'hidden' }}>
+              {cameraState === 'initializing' && (
+                <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'white', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', zIndex: 10 }}>
+                  <div style={{ width: '24px', height: '24px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'white', animation: 'spin 1s linear infinite' }} />
+                  <span style={{ fontSize: '14px' }}>Menyiapkan kamera...</span>
+                </div>
+              )}
+              {cameraState === 'error' && (
+                <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: '#ef4444', textAlign: 'center', padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', zIndex: 10 }}>
+                  <CameraOff size={32} />
+                  <span style={{ fontSize: '14px' }}>{cameraErrorMsg}</span>
+                </div>
+              )}
+              <div 
+                id="picking-reader" 
+                ref={scannerContainerRef}
+                style={{ 
+                  width: '100%', height: '100%',
+                  opacity: cameraState === 'active' ? 1 : 0,
+                  transition: 'opacity 0.3s ease'
+                }}
+              />
+            </div>
+            
+            <div style={{ color: 'rgba(255,255,255,0.7)', textAlign: 'center', fontSize: '14px' }}>
+              Arahkan kamera ke barcode pada produk.
+            </div>
+
+            <button 
+              className="btn btn-secondary" 
+              onClick={() => setIsScannerOpen(false)}
+              style={{ width: '100%', padding: '14px', marginTop: '8px' }}
+            >
+              Tutup
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
