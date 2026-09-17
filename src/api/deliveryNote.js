@@ -77,3 +77,39 @@ export const submitDeliveryNotePicking = async (name, items, pickupLater = false
   const response = await apiClient.post(endpoint, payload);
   return response.message || null;
 };
+
+/**
+ * Fetch history of submitted delivery notes for a specific user
+ * @param {string} userEmail - The email of the logged in user
+ * @param {number} limit - Items per page
+ * @param {number} offset - Offset for pagination
+ */
+export const getDeliveryNoteHistory = async (userEmail, limit = 20, offset = 0) => {
+  if (!userEmail) return [];
+  
+  const endpoint = '/api/resource/Delivery Note';
+  
+  const filters = [
+    ["docstatus", "=", 1],
+    ["custom_picked_by", "=", userEmail]
+  ];
+  
+  const fields = [
+    "name", 
+    "customer", 
+    "against_sales_order", 
+    "posting_date", 
+    "posting_time", 
+    "custom_pick_up_code"
+  ];
+  
+  const response = await apiClient.get(endpoint, {
+    fields: JSON.stringify(fields),
+    filters: JSON.stringify(filters),
+    limit_page_length: limit,
+    limit_start: offset,
+    order_by: 'modified desc'
+  });
+  
+  return response?.data || [];
+};

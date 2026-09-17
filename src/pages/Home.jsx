@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOrders } from '../context/OrderContext';
-import { Search, Package, MapPin, QrCode, Calendar, Truck, ClipboardList, ChevronLeft, RefreshCw } from 'lucide-react';
+import { Search, Package, MapPin, QrCode, Calendar, Truck, ClipboardList, ChevronLeft, RefreshCw, Clock } from 'lucide-react';
 
 const Home = () => {
   const [search, setSearch] = useState('');
@@ -139,6 +139,17 @@ const Home = () => {
         >
           <QrCode size={20} />
           Scan QR Pickup Pelanggan
+        </button>
+      </div>
+
+      <div style={{ padding: '12px 16px 0 16px' }}>
+        <button 
+          className="btn btn-secondary" 
+          onClick={() => navigate('/history')}
+          style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
+        >
+          <Clock size={20} />
+          Riwayat Picking
         </button>
       </div>
 

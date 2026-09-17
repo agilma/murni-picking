@@ -10,6 +10,7 @@ import Pickup from './pages/Pickup/index';
 import Login from './pages/Login/index';
 import Success from './pages/Success';
 import Settings from './pages/Settings';
+import History from './pages/History';
 
 const Toast = () => {
   const { toast } = useOrders();
@@ -37,6 +38,7 @@ const App = () => {
             <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
               <Route path="/" element={<Home />} />
               <Route path="/pickup" element={<Pickup />} />
+              <Route path="/history" element={<History />} />
               <Route path="/settings" element={<Settings />} />
             </Route>
 
