@@ -10,7 +10,7 @@ const OrderContext = createContext(null);
 export const useOrders = () => useContext(OrderContext);
 
 export const OrderProvider = ({ children }) => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [orders, setOrders] = useState([]); // Pending SOs
   const [deliveryNotes, setDeliveryNotes] = useState([]); // DNs
   const [activeOrder, setActiveOrder] = useState(null); // Selected DN for picking
@@ -172,6 +172,12 @@ export const OrderProvider = ({ children }) => {
   const completeOrder = async (pickupLater = false) => {
     if (!activeOrder) return false;
     
+    // Validation for logged-in user
+    if (!user || !user.username) {
+      showToast('Gagal submit: User login tidak ditemukan. Silakan login kembali.', 'error');
+      return false;
+    }
+    
     const isFullyPicked = activeOrder.items.every(i => i.pickedQty === i.orderedQty);
     if (!isFullyPicked) {
       showToast('Masih ada produk yang belum diambil.', 'error');
@@ -186,7 +192,7 @@ export const OrderProvider = ({ children }) => {
         qty: item.pickedQty
       }));
       
-      const submitRes = await submitDeliveryNotePicking(activeOrder.deliveryNoteNo, updatedItems, pickupLater);
+      const submitRes = await submitDeliveryNotePicking(activeOrder.deliveryNoteNo, updatedItems, pickupLater, user.username);
       
       const newLastPicked = {
         name: activeOrder.deliveryNoteNo,

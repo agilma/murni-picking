@@ -42,12 +42,16 @@ export const createDeliveryNoteFromSalesOrder = async (salesOrder) => {
  * Submit picked items for a delivery note
  * Payload adapter preps for pickup_later if backend eventually supports it.
  */
-export const buildDeliveryNoteSubmitPayload = ({ deliveryNoteNo, items, pickupLater }) => {
+export const buildDeliveryNoteSubmitPayload = ({ deliveryNoteNo, items, pickupLater, pickedBy }) => {
   const payload = {
     name: deliveryNoteNo,
     items: items,
     custom_pickup_later: pickupLater ? 1 : 0
   };
+  
+  if (pickedBy) {
+    payload.custom_picked_by = pickedBy;
+  }
   
   return payload;
 };
@@ -57,14 +61,15 @@ export const buildDeliveryNoteSubmitPayload = ({ deliveryNoteNo, items, pickupLa
  * @param {string} name - Delivery Note name/ID
  * @param {Array} items - Array of picked items
  * @param {boolean} pickupLater - Whether to pickup later
+ * @param {string} pickedBy - Email or username of the person picking
  */
-export const submitDeliveryNotePicking = async (name, items, pickupLater = false) => {
+export const submitDeliveryNotePicking = async (name, items, pickupLater = false, pickedBy = null) => {
   const endpoint = import.meta.env.VITE_API_DELIVERY_NOTE_ENDPOINT;
   if (!endpoint) {
     throw new Error('Missing VITE_API_DELIVERY_NOTE_ENDPOINT in environment variables');
   }
 
-  const payload = buildDeliveryNoteSubmitPayload({ deliveryNoteNo: name, items, pickupLater });
+  const payload = buildDeliveryNoteSubmitPayload({ deliveryNoteNo: name, items, pickupLater, pickedBy });
 
   const response = await apiClient.post(endpoint, payload);
   return response.message || null;
