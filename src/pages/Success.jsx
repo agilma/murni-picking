@@ -8,6 +8,8 @@ const Success = () => {
   const location = useLocation();
   const { clearActiveOrder } = useOrders();
   const [copied, setCopied] = useState(false);
+  const [pickupCodeCopied, setPickupCodeCopied] = useState(false);
+  const [showNextOrderConfirmation, setShowNextOrderConfirmation] = useState(false);
 
   const { orderId, type, customPickUpCode } = location.state || {};
 
@@ -22,6 +24,7 @@ const Success = () => {
     try {
       await navigator.clipboard.writeText(customPickUpCode);
       setCopied(true);
+      setPickupCodeCopied(true);
 
       setTimeout(() => {
         setCopied(false);
@@ -29,6 +32,19 @@ const Success = () => {
     } catch (error) {
       console.error('Failed to copy pickup code:', error);
     }
+  };
+
+  const proceedToNextOrder = () => {
+    navigate('/');
+  };
+
+  const handleNextOrder = () => {
+    if (type === 'PICKUP_NOW' && customPickUpCode && !pickupCodeCopied) {
+      setShowNextOrderConfirmation(true);
+      return;
+    }
+
+    proceedToNextOrder();
   };
 
   if (!orderId) {
@@ -116,10 +132,57 @@ const Success = () => {
       )}
 
       <div style={{ marginTop: '40px', width: '100%', maxWidth: '320px' }}>
-        <button className="btn btn-primary" onClick={() => navigate('/')} style={{ width: '100%' }}>
+        <button className="btn btn-primary" onClick={handleNextOrder} style={{ width: '100%' }}>
           Process Next Order
         </button>
       </div>
+
+      {showNextOrderConfirmation && (
+        <div style={{ 
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+          backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 9999, 
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          padding: '24px'
+        }}>
+          <div style={{ 
+            backgroundColor: 'var(--bg-primary)', 
+            width: '100%', 
+            maxWidth: '320px', 
+            borderRadius: '12px', 
+            padding: '24px',
+            boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+            textAlign: 'center',
+            animation: 'scaleIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+          }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '700', margin: '0 0 16px 0', color: 'var(--text-primary)' }}>
+              Pickup Code belum disalin
+            </h3>
+            
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '24px', lineHeight: '1.5' }}>
+              Anda belum menyalin Pickup Code untuk order ini.<br/><br/>Apakah Anda yakin ingin melanjutkan ke order berikutnya?
+            </p>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <button 
+                onClick={() => setShowNextOrderConfirmation(false)}
+                className="btn btn-primary"
+                style={{ width: '100%' }}
+              >
+                Tetap di Halaman
+              </button>
+              
+              <button 
+                onClick={proceedToNextOrder}
+                className="btn btn-secondary"
+                style={{ width: '100%' }}
+              >
+                Lanjut Order Berikutnya
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
