@@ -97,7 +97,6 @@ export const getDeliveryNoteHistory = async (userEmail, limit = 20, offset = 0) 
   const fields = [
     "name", 
     "customer", 
-    "against_sales_order", 
     "posting_date", 
     "posting_time", 
     "custom_pick_up_code"

@@ -172,11 +172,13 @@ const History = () => {
                   </span>
                 </div>
                 
-                <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: 'var(--text-primary)' }}>
-                  Sales Order: <strong>{item.against_sales_order}</strong>
-                </p>
+                {item.against_sales_order && (
+                  <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: 'var(--text-primary)' }}>
+                    Sales Order: <strong>{item.against_sales_order}</strong>
+                  </p>
+                )}
                 <p style={{ margin: '2px 0 0 0', fontSize: '14px', color: 'var(--text-secondary)' }}>
-                  Customer: {item.customer}
+                  Customer: {item.customer || '-'}
                 </p>
               </div>
             ))}
