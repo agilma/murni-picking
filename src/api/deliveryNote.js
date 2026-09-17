@@ -51,7 +51,10 @@ export const buildDeliveryNoteSubmitPayload = ({ deliveryNoteNo, items, pickupLa
   
   if (pickedBy) {
     payload.custom_picked_by = pickedBy;
+    payload.picked_by = pickedBy;
   }
+  
+  console.log('Submit Picking payload:', payload);
   
   return payload;
 };

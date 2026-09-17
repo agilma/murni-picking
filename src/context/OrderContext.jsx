@@ -173,8 +173,9 @@ export const OrderProvider = ({ children }) => {
     if (!activeOrder) return false;
     
     // Validation for logged-in user
-    if (!user || !user.username) {
-      showToast('Gagal submit: User login tidak ditemukan. Silakan login kembali.', 'error');
+    const loggedInUserEmail = user?.username;
+    if (!loggedInUserEmail || loggedInUserEmail.toLowerCase() === 'guest') {
+      showToast('User login email is required for picking submission', 'error');
       return false;
     }
     
@@ -192,7 +193,7 @@ export const OrderProvider = ({ children }) => {
         qty: item.pickedQty
       }));
       
-      const submitRes = await submitDeliveryNotePicking(activeOrder.deliveryNoteNo, updatedItems, pickupLater, user.username);
+      const submitRes = await submitDeliveryNotePicking(activeOrder.deliveryNoteNo, updatedItems, pickupLater, loggedInUserEmail);
       
       const newLastPicked = {
         name: activeOrder.deliveryNoteNo,
