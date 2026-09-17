@@ -140,6 +140,42 @@ const DeliveryNoteDetail = () => {
             </div>
           </div>
         ) : null}
+
+        {detail && (
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <h2 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: 'var(--text-primary)' }}>
+              Items
+            </h2>
+
+            {(!detail.items || detail.items.length === 0) ? (
+              <div style={{ textAlign: 'center', padding: '16px', color: 'var(--text-secondary)' }}>
+                Tidak ada item pada Delivery Note ini.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {detail.items.map((item, idx) => (
+                  <div key={item.name || `${item.item_code}-${idx}`} style={{ 
+                    borderTop: idx > 0 ? '1px solid var(--border-color)' : 'none',
+                    paddingTop: idx > 0 ? '16px' : '0',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px'
+                  }}>
+                    <div style={{ fontWeight: '600', color: 'var(--text-primary)' }}>
+                      {item.item_name || item.item_code}
+                    </div>
+                    <div style={{ fontSize: '14px', color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>{item.item_code}</span>
+                      <span style={{ fontWeight: '600', color: 'var(--text-primary)' }}>
+                        {item.qty} {item.uom ? `× ${item.uom}` : ''}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
       
       <style>{`
