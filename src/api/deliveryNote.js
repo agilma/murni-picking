@@ -90,8 +90,7 @@ export const getDeliveryNoteHistory = async (userEmail, limit = 20, offset = 0) 
   const endpoint = '/api/resource/Delivery Note';
   
   const filters = [
-    ["docstatus", "=", 1],
-    ["custom_picked_by", "=", userEmail]
+    ["docstatus", "=", 1]
   ];
   
   const fields = [
