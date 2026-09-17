@@ -74,10 +74,12 @@ const Success = () => {
           <p className="text-secondary" style={{ fontSize: '14px', marginBottom: '8px' }}>Pickup Code</p>
           {customPickUpCode ? (
             <>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '12px' }}>
-                <h1 style={{ fontSize: '22px', fontWeight: '700', margin: '0', color: 'var(--text-primary)', letterSpacing: '2px', lineHeight: '1.2', wordBreak: 'break-all' }}>
-                  {customPickUpCode}
-                </h1>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '12px' }}>
+                <div style={{ flex: 1, minWidth: 0, overflowX: 'auto', textAlign: 'left', paddingBottom: '4px' }}>
+                  <h1 style={{ fontSize: '20px', fontWeight: '700', margin: '0', color: 'var(--text-primary)', letterSpacing: '1px', lineHeight: '1.2', whiteSpace: 'nowrap' }}>
+                    {customPickUpCode}
+                  </h1>
+                </div>
                 <button 
                   onClick={handleCopyPickupCode}
                   style={{
@@ -93,7 +95,8 @@ const Success = () => {
                     fontSize: '13px',
                     fontWeight: '600',
                     transition: 'all 0.2s ease',
-                    whiteSpace: 'nowrap'
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0
                   }}
                 >
                   {copied ? <Check size={16} /> : <Copy size={16} />}
