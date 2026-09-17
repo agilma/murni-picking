@@ -154,15 +154,20 @@ const History = () => {
         ) : (
           <>
             {historyItems.map((item, idx) => (
-              <div key={item.name || idx} style={{
-                backgroundColor: 'var(--bg-elevated)',
-                borderRadius: '8px',
-                padding: '16px',
-                border: '1px solid var(--border-color)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '4px'
-              }}>
+              <div 
+                key={item.name || idx} 
+                onClick={() => navigate(`/history/${encodeURIComponent(item.name)}`)}
+                style={{
+                  backgroundColor: 'var(--bg-elevated)',
+                  borderRadius: '8px',
+                  padding: '16px',
+                  border: '1px solid var(--border-color)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px',
+                  cursor: 'pointer'
+                }}
+              >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <h3 style={{ fontSize: '16px', fontWeight: '700', margin: 0, color: 'var(--text-primary)' }}>
                     {item.name}

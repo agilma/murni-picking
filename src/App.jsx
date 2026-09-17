@@ -11,6 +11,7 @@ import Login from './pages/Login/index';
 import Success from './pages/Success';
 import Settings from './pages/Settings';
 import History from './pages/History';
+import DeliveryNoteDetail from './pages/DeliveryNoteDetail';
 
 const Toast = () => {
   const { toast } = useOrders();
@@ -43,6 +44,11 @@ const App = () => {
             </Route>
 
             {/* Standalone Authenticated Routes */}
+            <Route path="/history/:deliveryNoteName" element={
+              <ProtectedRoute>
+                <DeliveryNoteDetail />
+              </ProtectedRoute>
+            } />
             <Route path="/picking" element={
               <ProtectedRoute>
                 <Picking />

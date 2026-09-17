@@ -97,8 +97,7 @@ export const getDeliveryNoteHistory = async (userEmail, limit = 20, offset = 0) 
     "name", 
     "customer", 
     "posting_date", 
-    "posting_time", 
-    "custom_pick_up_code"
+    "posting_time"
   ];
   
   const response = await apiClient.get(endpoint, {
@@ -110,4 +109,18 @@ export const getDeliveryNoteHistory = async (userEmail, limit = 20, offset = 0) 
   });
   
   return response?.data || [];
+};
+
+/**
+ * Fetch a single Delivery Note detail
+ * @param {string} deliveryNoteName - The name of the Delivery Note
+ */
+export const getDeliveryNoteDetail = async (deliveryNoteName) => {
+  if (!deliveryNoteName) return null;
+  
+  const endpoint = `/api/resource/Delivery Note/${encodeURIComponent(deliveryNoteName)}`;
+  
+  const response = await apiClient.get(endpoint);
+  
+  return response?.data || null;
 };
