@@ -68,8 +68,29 @@ export const getSalesOrderByName = async (name) => {
   if (!name) throw new Error('Sales Order name is required');
   
   try {
-    const docResponse = await apiClient.get(`/api/resource/Sales Order/${name}`);
-    return docResponse.data || null;
+    // 1. Try exact match first
+    try {
+      const docResponse = await apiClient.get(`/api/resource/Sales Order/${name}`);
+      if (docResponse.data) return docResponse.data;
+    } catch (e) {
+      // Ignore exact match error, proceed to partial match
+    }
+
+    // 2. Try partial match using like %name%
+    const listResponse = await apiClient.get('/api/resource/Sales Order', {
+      filters: JSON.stringify([["Sales Order", "name", "like", `%${name}%`]]),
+      limit_page_length: 1,
+      order_by: 'creation desc'
+    });
+    
+    const orders = listResponse.data || [];
+    if (orders.length > 0) {
+      const orderName = orders[0].name;
+      const docResponse = await apiClient.get(`/api/resource/Sales Order/${orderName}`);
+      return docResponse.data || null;
+    }
+    
+    return null;
   } catch (e) {
     console.warn(`Failed to fetch Sales Order by name: ${name}`, e);
     return null;
