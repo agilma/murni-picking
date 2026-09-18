@@ -3,10 +3,37 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, QrCode, Search, CheckCircle } from 'lucide-react';
 import { useOrders } from '../context/OrderContext';
 import { getDeliveryNoteWithItems } from '../api/picking';
-import { submitDeliveryNote, findDeliveryNotesBySalesOrder } from '../api/deliveryNote';
+import { submitDeliveryNote, submitFrappeDeliveryNote, findDeliveryNotesBySalesOrder } from '../api/deliveryNote';
 import { getSalesOrderByPickupCode } from '../api/salesOrder';
 import { resolvePickupFlow, canReceivePickingForFlow } from '../utils/pickupFlow';
 import { useAuth } from '../context/AuthContext';
+
+const parseServerMessages = (serverMessages) => {
+  try {
+    if (!serverMessages) return [];
+    let parsed = typeof serverMessages === 'string' ? JSON.parse(serverMessages) : serverMessages;
+    if (typeof parsed === 'string') {
+      parsed = JSON.parse(parsed); // Sometimes it's doubly stringified
+    }
+    
+    if (Array.isArray(parsed)) {
+      return parsed.map(msg => {
+        if (typeof msg === 'string') {
+          try {
+            const innerMsg = JSON.parse(msg);
+            return innerMsg.message || innerMsg;
+          } catch (e) {
+            return msg;
+          }
+        }
+        return msg.message || msg;
+      });
+    }
+  } catch (err) {
+    console.error('Failed to parse _server_messages:', err);
+  }
+  return [];
+};
 
 const ReceivePicking = () => {
   const navigate = useNavigate();
@@ -15,7 +42,8 @@ const ReceivePicking = () => {
   
   const [pickupCode, setPickupCode] = useState('');
   const [loading, setLoading] = useState(false);
-  const [dnDetail, setDnDetail] = useState(null);
+  const [candidateDns, setCandidateDns] = useState([]);
+  const [isBatchMode, setIsBatchMode] = useState(false);
   const [error, setError] = useState(null);
   
   const handleSearch = async (e) => {
@@ -24,115 +52,90 @@ const ReceivePicking = () => {
     
     setLoading(true);
     setError(null);
-    setDnDetail(null);
+    setLoading(true);
+    setError(null);
     
     try {
       const searchVal = pickupCode.trim();
-      let detail = null;
       let soName = null;
-      let searchType = 'unknown';
-      let dnFoundCount = 0;
+      let authorizedCandidates = [];
+      let foundAnyDn = false;
+      let foundUnpicked = false;
+      let foundNotDraft = false;
       
-      // We assume it's a pickup code first if it looks like one, or try Delivery Note directly.
-      // Usually DN names start with 'MAT-DN-' or similar, but let's try getSalesOrderByPickupCode first
-      // since the primary search for Pickup role is by pickup code.
-      // We will try fetching Sales Order first, if not found, we fallback to searching as DN directly.
       const so = await getSalesOrderByPickupCode(searchVal);
       
       if (so) {
-        searchType = 'pickup_code';
         soName = so.name;
-        // Found SO, get associated DNs
         const dns = await findDeliveryNotesBySalesOrder(so.name);
-        dnFoundCount = dns.length;
+        if (dns && dns.length > 0) foundAnyDn = true;
         
-        // Filter candidates
-        const candidates = dns.filter(dn => 
-          (dn.docstatus === 0 || dn.status === 'Draft') && dn.custom_event_is_picked === 1
-        );
+        const candidates = dns.filter(dn => {
+          const isDraft = (dn.docstatus === 0 || dn.status === 'Draft');
+          const isPicked = (dn.custom_event_is_picked === 1);
+          if (!isDraft) foundNotDraft = true;
+          if (!isPicked) foundUnpicked = true;
+          return isDraft && isPicked;
+        });
         
-        // If multiple candidates, find one that matches authorization
-        for (const candidate of candidates) {
-          const isAllowed = canReceivePickingForFlow({
+        authorizedCandidates = candidates.filter(candidate => canReceivePickingForFlow({
             role: user?.roleProfile,
             deliveryNote: candidate
-          });
-          if (isAllowed) {
-            // Found a match, get full details
-            detail = await getDeliveryNoteWithItems(candidate.name);
-            break;
+        }));
+      }
+      
+      if (authorizedCandidates.length === 0) {
+        // Fallback: search as Delivery Note ID directly
+        const detail = await getDeliveryNoteWithItems(searchVal);
+        if (detail) {
+          foundAnyDn = true;
+          const isDraft = (detail.docstatus === 0 || detail.status === 'Draft');
+          const isPicked = (detail.custom_event_is_picked === 1);
+          
+          if (!isDraft) foundNotDraft = true;
+          if (!isPicked) foundUnpicked = true;
+          
+          if (isDraft && isPicked) {
+            const isAllowed = canReceivePickingForFlow({
+              role: user?.roleProfile,
+              deliveryNote: detail
+            });
+            if (isAllowed) authorizedCandidates.push(detail);
           }
         }
-        
-        if (!detail && candidates.length > 0) {
-          // No authorized candidate, just pick the first to let it fail authorization below
-          // so the user gets a proper error message.
-          detail = await getDeliveryNoteWithItems(candidates[0].name);
-        }
-        
-        if (!detail && dnFoundCount > 0) {
-           // All DNs were either docstatus 1 or not picked
-           // Let's just grab the first one to show a proper error
-           detail = await getDeliveryNoteWithItems(dns[0].name);
-        }
-      } 
-      
-      if (!detail) {
-        // Fallback: search as Delivery Note ID directly
-        searchType = 'delivery_note';
-        detail = await getDeliveryNoteWithItems(searchVal);
       }
       
-      if (!detail) {
-        if (searchType === 'pickup_code' && soName) {
-           setError('Delivery Note untuk pickup code ini belum ditemukan.');
+      if (authorizedCandidates.length > 0) {
+        setCandidateDns(prev => {
+          const newCandidates = [...prev];
+          let added = false;
+          authorizedCandidates.forEach(cand => {
+            if (!newCandidates.find(d => d.name === cand.name)) {
+              newCandidates.push(cand);
+              added = true;
+            }
+          });
+          if (added && newCandidates.length > 1) {
+            setIsBatchMode(true);
+          }
+          return newCandidates;
+        });
+        setPickupCode('');
+      } else if (foundAnyDn) {
+        if (foundUnpicked) {
+            setError('Barang belum selesai dipicking oleh tim Picking.');
+        } else if (foundNotDraft) {
+            setError('Delivery Note sudah diterima atau status tidak valid.');
         } else {
-           setError('Delivery Note tidak ditemukan.');
+            setError('Delivery Note ini tidak dapat diterima oleh role Anda.');
         }
-        setLoading(false);
-        return;
+      } else {
+        if (soName) {
+            setError('Delivery Note untuk pickup code ini belum ditemukan.');
+        } else {
+            setError('Delivery Note tidak ditemukan.');
+        }
       }
-      
-      // Temporary Debug Logging
-      console.log(`[Receive Picking]
-Role: ${user?.roleProfile}
-Search Type: ${searchType}
-Search Value: ${searchVal}
-Sales Order: ${soName || 'N/A'}
-Delivery Notes Found: ${dnFoundCount}
-Selected Delivery Note: ${detail.name}
-Pickup Flow: ${resolvePickupFlow(detail)}
-custom_event_is_picked: ${detail.custom_event_is_picked}
-docstatus: ${detail.docstatus !== undefined ? detail.docstatus : detail.status}
-Authorization: ${canReceivePickingForFlow({ role: user?.roleProfile, deliveryNote: detail })}`);
-
-      // Validate custom_event_is_picked === 1
-      if (!detail.isPicked && detail.custom_event_is_picked !== 1) {
-        setError('Barang belum selesai dipicking oleh tim Picking.');
-        setLoading(false);
-        return;
-      }
-      
-      const isDraft = detail.docstatus === 0 || detail.status === 'Draft';
-      if (!isDraft) {
-        const isSubmitted = detail.docstatus === 1 || detail.status === 'Return' || detail.status === 'Submitted';
-        setError(isSubmitted ? 'Delivery Note sudah diterima.' : 'Delivery Note tidak valid (bukan Draft).');
-        setLoading(false);
-        return;
-      }
-      
-      const isAllowed = canReceivePickingForFlow({
-        role: user?.roleProfile,
-        deliveryNote: detail
-      });
-      
-      if (!isAllowed) {
-        setError('Delivery Note ini tidak dapat diterima oleh role Anda.');
-        setLoading(false);
-        return;
-      }
-      
-      setDnDetail(detail);
     } catch (err) {
       console.error(err);
       setError('Gagal mencari data. ' + err.message);
@@ -142,23 +145,54 @@ Authorization: ${canReceivePickingForFlow({ role: user?.roleProfile, deliveryNot
   };
   
   const handleReceiveAndSubmit = async () => {
-    if (!dnDetail) return;
+    if (candidateDns.length === 0) return;
     
     setLoading(true);
+    let successMessages = [];
+    
     try {
-      // Submit DN
-      const submitResponse = await submitDeliveryNote(dnDetail.name || dnDetail.deliveryNoteNo);
-      
-      // Verify docstatus conceptually using the response
-      if (submitResponse && submitResponse.status === 'success') {
-        if (submitResponse.docstatus !== 1) {
-          throw new Error('Delivery Note gagal berubah status menjadi Submitted.');
+      if (isBatchMode) {
+        for (const dn of candidateDns) {
+          const resp = await submitFrappeDeliveryNote(dn);
+          const serverMsgs = parseServerMessages(resp._server_messages);
+          if (serverMsgs.length > 0) {
+            successMessages.push(`DN ${dn.name}: ${serverMsgs.join(' ')}`);
+          }
         }
-      } else if (submitResponse && submitResponse.docstatus !== undefined && submitResponse.docstatus !== 1) {
-          throw new Error('Delivery Note gagal berubah status menjadi Submitted.');
+      } else {
+        const dn = candidateDns[0];
+        const submitResponse = await submitDeliveryNote(dn.name || dn.deliveryNoteNo);
+        const submitMsg = submitResponse?.message || {};
+        
+        if (submitMsg.status === 'success') {
+          if (submitMsg.docstatus !== 1) {
+            throw new Error(`Delivery Note ${dn.name} gagal berubah status.`);
+          }
+          const serverMsgs = parseServerMessages(submitResponse._server_messages);
+          if (serverMsgs.length > 0) {
+             successMessages.push(...serverMsgs);
+          }
+        } else if (submitMsg.docstatus !== undefined && submitMsg.docstatus !== 1) {
+            throw new Error(`Delivery Note ${dn.name} gagal berubah status.`);
+        } else {
+          // Additional fallback if it's not a clear error but status isn't 1
+          if (submitResponse?.docstatus !== undefined && submitResponse?.docstatus !== 1) {
+              throw new Error(`Delivery Note ${dn.name} gagal berubah status.`);
+          }
+        }
       }
       
-      alert('Berhasil menerima barang dan mensubmit Delivery Note!');
+      const isBatch = isBatchMode;
+      const baseMsg = isBatch ? 'Berhasil men-submit seluruh Delivery Note secara Batch!' : 'Berhasil menerima barang dan mensubmit Delivery Note!';
+      
+      let finalToastHtml = baseMsg;
+      if (successMessages.length > 0) {
+         // Clean up HTML tags like <b> from messages for simple toast or keep them if toast supports HTML.
+         // Usually simple string is safer. But we can just append it.
+         finalToastHtml = `${baseMsg}\n\nInfo:\n${successMessages.join('\n').replace(/<[^>]*>?/gm, '')}`;
+      }
+      
+      alert(finalToastHtml);
       navigate('/');
     } catch (err) {
       console.error(err);
@@ -215,19 +249,65 @@ Authorization: ${canReceivePickingForFlow({ role: user?.roleProfile, deliveryNot
           </div>
         )}
 
-        {dnDetail && (
+        {candidateDns.length > 0 && (
           <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div>
-              <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Delivery Note</div>
-              <div style={{ fontWeight: '700', fontSize: '18px' }}>{dnDetail.name}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Status</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--success-color)', fontWeight: '600' }}>
-                <CheckCircle size={16} />
-                Selesai Dipicking
+            <div style={{ paddingBottom: '12px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontWeight: '600' }}>Terdapat {candidateDns.length} Delivery Note</span>
+                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                  Total {candidateDns.reduce((sum, dn) => sum + (dn.items ? dn.items.reduce((s, i) => s + i.qty, 0) : 0), 0)} Item
+                </span>
               </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input 
+                  type="checkbox" 
+                  checked={isBatchMode} 
+                  onChange={(e) => setIsBatchMode(e.target.checked)}
+                  style={{ width: '18px', height: '18px' }}
+                />
+                <span>Batch Submit</span>
+              </label>
             </div>
+            
+            {candidateDns.map(dn => {
+              const totalItems = dn.items ? dn.items.reduce((sum, item) => sum + item.qty, 0) : 0;
+              const customerName = dn.customer || dn.customer_name || '-';
+              const soNumber = dn.against_sales_order || dn.sales_order || '-';
+              const pickupCodeStr = dn.pickup_code || dn.custom_pick_up_code || '-';
+              
+              return (
+                <div key={dn.name} style={{ display: 'flex', flexDirection: 'column', padding: '12px 0', borderBottom: '1px dashed var(--border-color)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Delivery Note</div>
+                      <div style={{ fontWeight: '700', fontSize: '16px', marginBottom: '8px' }}>{dn.name}</div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--success-color)', fontWeight: '600', fontSize: '12px', backgroundColor: 'rgba(34, 197, 94, 0.1)', padding: '4px 8px', borderRadius: '12px' }}>
+                      <CheckCircle size={12} /> Dipicking
+                    </div>
+                  </div>
+                  
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '13px', backgroundColor: 'var(--bg-secondary)', padding: '10px', borderRadius: '8px', marginTop: '4px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>Customer</span>
+                      <span style={{ fontWeight: '600' }}>{customerName}</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>Sales Order</span>
+                      <span style={{ fontWeight: '600' }}>{soNumber}</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>Pickup Code</span>
+                      <span style={{ fontWeight: '600' }}>{pickupCodeStr}</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>Total Item</span>
+                      <span style={{ fontWeight: '600' }}>{totalItems}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
             
             <button
               className="btn btn-primary"
@@ -235,7 +315,7 @@ Authorization: ${canReceivePickingForFlow({ role: user?.roleProfile, deliveryNot
               disabled={loading}
               style={{ padding: '16px', fontSize: '16px', marginTop: '8px' }}
             >
-              {loading ? 'Memproses...' : 'Terima & Submit DN'}
+              {loading ? 'Memproses...' : (isBatchMode ? `Terima & Submit Batch (${candidateDns.length} DN)` : 'Terima & Submit DN')}
             </button>
           </div>
         )}

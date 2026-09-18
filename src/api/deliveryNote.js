@@ -123,10 +123,6 @@ export const getDeliveryNoteDetail = async (deliveryNoteName) => {
   return response?.data || null;
 };
 
-/**
- * Standard Frappe submit mechanism for Delivery Note
- * @param {string} deliveryNoteName 
- */
 export const submitDeliveryNote = async (deliveryNoteName) => {
   const endpoint = import.meta.env.VITE_API_DELIVERY_NOTE_ENDPOINT;
   if (!endpoint) {
@@ -135,6 +131,20 @@ export const submitDeliveryNote = async (deliveryNoteName) => {
   
   const response = await apiClient.post(endpoint, {
     name: deliveryNoteName
+  });
+  
+  return response;
+};
+
+/**
+ * Standard Frappe submit mechanism for Delivery Note (used for batch)
+ * @param {object} dn - The delivery note object
+ */
+export const submitFrappeDeliveryNote = async (dn) => {
+  const endpoint = '/api/method/frappe.client.submit';
+  
+  const response = await apiClient.post(endpoint, {
+    doc: dn
   });
   
   return response.message || response.data || response;
