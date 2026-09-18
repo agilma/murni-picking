@@ -185,11 +185,11 @@ const ReceivePicking = () => {
       const isBatch = isBatchMode;
       const baseMsg = isBatch ? 'Berhasil men-submit seluruh Delivery Note secara Batch!' : 'Berhasil menerima barang dan mensubmit Delivery Note!';
       
-      alert(baseMsg);
+      showToast(baseMsg, 'success');
       navigate('/');
     } catch (err) {
       console.error(err);
-      alert(err.message || 'Gagal mensubmit Delivery Note.');
+      showToast(err.message || 'Gagal mensubmit Delivery Note.', 'error');
     } finally {
       setLoading(false);
     }
