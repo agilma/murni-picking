@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, QrCode, Search, CheckCircle } from 'lucide-react';
+import { ChevronLeft, QrCode, Search, CheckCircle, User, UserCheck } from 'lucide-react';
 import { useOrders } from '../context/OrderContext';
 import { getDeliveryNoteWithItems } from '../api/picking';
-import { submitDeliveryNote, submitFrappeDeliveryNote, findDeliveryNotesBySalesOrder } from '../api/deliveryNote';
+import { submitDeliveryNote, submitFrappeDeliveryNote, findDeliveryNotesBySalesOrder, submitDeliveryNotesBatch } from '../api/deliveryNote';
 import { getSalesOrderByName } from '../api/salesOrder';
 import { resolvePickupFlow, canReceivePickingForFlow } from '../utils/pickupFlow';
 import { useAuth } from '../context/AuthContext';
@@ -45,6 +45,7 @@ const ReceivePicking = () => {
   const [candidateDns, setCandidateDns] = useState([]);
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [error, setError] = useState(null);
+  const [successData, setSuccessData] = useState(null);
   
   const handleSearch = async (e) => {
     e.preventDefault();
@@ -111,7 +112,7 @@ const ReceivePicking = () => {
           let added = false;
           authorizedCandidates.forEach(cand => {
             if (!newCandidates.find(d => d.name === cand.name)) {
-              newCandidates.push(cand);
+              newCandidates.unshift(cand);
               added = true;
             }
           });
@@ -152,24 +153,43 @@ const ReceivePicking = () => {
     
     try {
       let finalPickupCode = null;
+      let successRespData = null;
+      
       if (isBatchMode) {
-        for (const dn of candidateDns) {
-          const resp = await submitFrappeDeliveryNote(dn);
-          const serverMsgs = parseServerMessages(resp._server_messages);
-          if (serverMsgs.length > 0) {
-            successMessages.push(`DN ${dn.name}: ${serverMsgs.join(' ')}`);
-          }
+        const names = candidateDns.map(dn => dn.name || dn.deliveryNoteNo);
+        const submitResponse = await submitDeliveryNotesBatch(names);
+        const batchResults = submitResponse?.message || [];
+        
+        const successfulResults = batchResults.filter(r => r.status === 'success');
+        
+        const mergedResults = successfulResults.map(res => {
+          const originalDn = candidateDns.find(dn => (dn.name || dn.deliveryNoteNo) === res.delivery_note);
+          return {
+            ...res,
+            custom_pick_up_code: res.custom_pick_up_code || (originalDn ? originalDn.custom_pick_up_code : null)
+          };
+        });
+
+        if (mergedResults.length === 0) {
+          throw new Error('Seluruh Delivery Note dalam batch gagal di-submit.');
         }
+
+        const serverMsgs = parseServerMessages(submitResponse?._server_messages);
+        if (serverMsgs.length > 0) {
+          successMessages.push(...serverMsgs);
+        }
+
+        successRespData = mergedResults;
       } else {
         const dn = candidateDns[0];
         const submitResponse = await submitDeliveryNote(dn.name || dn.deliveryNoteNo);
         const submitMsg = submitResponse?.message || {};
         
-        if (submitMsg.custom_pick_up_code) {
-          finalPickupCode = submitMsg.custom_pick_up_code;
-        }
-        
         if (submitMsg.status === 'success') {
+          successRespData = submitMsg;
+          if (submitMsg.custom_pick_up_code) {
+            finalPickupCode = submitMsg.custom_pick_up_code;
+          }
           if (submitMsg.docstatus !== 1) {
             throw new Error(`Delivery Note ${dn.name} gagal berubah status.`);
           }
@@ -189,12 +209,19 @@ const ReceivePicking = () => {
       
       let baseMsg = isBatchMode ? 'Berhasil men-submit seluruh Delivery Note secara Batch!' : 'Berhasil menerima barang dan mensubmit Delivery Note!';
       
-      if (finalPickupCode) {
-        baseMsg = `Berhasil submit DN. Kode Pickup: ${finalPickupCode}`;
+      if (successRespData) {
+        setSuccessData({
+          data: successRespData,
+          messages: successMessages
+        });
+        // Do not navigate yet, user must dismiss the success screen
+      } else {
+        if (finalPickupCode) {
+          baseMsg = `Berhasil submit DN. Kode Pickup: ${finalPickupCode}`;
+        }
+        showToast(baseMsg, 'success');
+        navigate('/');
       }
-      
-      showToast(baseMsg, 'success');
-      navigate('/');
     } catch (err) {
       console.error(err);
       showToast(err.message || 'Gagal mensubmit Delivery Note.', 'error');
@@ -202,6 +229,86 @@ const ReceivePicking = () => {
       setLoading(false);
     }
   };
+
+  if (successData) {
+    const data = successData.data;
+    const msgs = successData.messages;
+    
+    if (Array.isArray(data)) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: 'var(--bg-primary)', padding: '24px', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0, marginBottom: '24px', marginTop: '24px' }}>
+            <CheckCircle size={64} color="var(--success-color)" style={{ marginBottom: '16px' }} />
+            <h2 style={{ fontSize: '24px', fontWeight: '800', marginBottom: '8px', color: 'var(--text-primary)', textAlign: 'center' }}>Terima Batch Berhasil!</h2>
+            <p style={{ color: 'var(--text-secondary)', textAlign: 'center', maxWidth: '350px', lineHeight: '1.5' }}>
+              <b>{data.length}</b> pesanan telah diterima dari tim Picking dan siap diambil oleh pelanggan.
+            </p>
+          </div>
+
+          <div style={{ width: '100%', maxWidth: '400px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px', padding: '4px' }}>
+            {data.map((item, idx) => (
+              <div key={idx} style={{ backgroundColor: '#ffffff', padding: '16px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', borderLeft: '4px solid var(--accent-primary)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div style={{ fontWeight: '700', fontSize: '16px', color: 'var(--text-primary)' }}>{item.sales_order}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{item.delivery_note}</div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '600' }}>KODE PICKUP</div>
+                    <div style={{ padding: '4px 10px', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px', fontSize: '16px', fontWeight: '800', color: 'var(--primary-color)' }}>
+                      {item.custom_pick_up_code || '-'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          <button 
+            className="btn btn-primary" 
+            style={{ width: '100%', maxWidth: '400px', padding: '16px', fontSize: '18px', fontWeight: 'bold', borderRadius: '12px', flexShrink: 0, marginBottom: '24px' }}
+            onClick={() => navigate('/')}
+          >
+            Selesai & Kembali ke Beranda
+          </button>
+        </div>
+      );
+    }
+    
+    // Single Submit View
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: 'var(--bg-primary)', padding: '24px', alignItems: 'center', justifyContent: 'center' }}>
+        <CheckCircle size={80} color="var(--success-color)" style={{ marginBottom: '24px' }} />
+        <h2 style={{ fontSize: '28px', fontWeight: '800', marginBottom: '8px', color: 'var(--text-primary)', textAlign: 'center' }}>Terima Barang Berhasil!</h2>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: '24px', textAlign: 'center', maxWidth: '350px', lineHeight: '1.5' }}>
+          Barang telah diterima dari tim Picking. Pesanan ini <b>siap diambil</b> oleh pelanggan.
+        </p>
+        
+        <div style={{ backgroundColor: '#ffffff', padding: '24px', borderRadius: '16px', width: '100%', maxWidth: '400px', marginBottom: '32px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+          <div style={{ marginBottom: '16px', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sales Order</div>
+            <div style={{ fontSize: '22px', fontWeight: '700', color: 'var(--text-primary)' }}>{data.sales_order}</div>
+          </div>
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Delivery Note</div>
+            <div style={{ fontSize: '15px', fontWeight: '500', color: 'var(--text-secondary)' }}>{data.delivery_note}</div>
+          </div>
+          <div style={{ padding: '20px', backgroundColor: 'var(--bg-secondary)', borderRadius: '12px', textAlign: 'center', border: '2px dashed #cbd5e1' }}>
+            <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '8px', fontWeight: '500' }}>KODE PICKUP</div>
+            <div style={{ fontSize: '26px', fontWeight: '800', color: 'var(--primary-color)', letterSpacing: '1px', wordBreak: 'break-all' }}>{data.custom_pick_up_code}</div>
+          </div>
+        </div>
+        
+        <button 
+          className="btn btn-primary" 
+          style={{ width: '100%', maxWidth: '400px', padding: '16px', fontSize: '18px', fontWeight: 'bold', borderRadius: '12px' }}
+          onClick={() => navigate('/')}
+        >
+          Selesai & Kembali ke Beranda
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
@@ -230,7 +337,7 @@ const ReceivePicking = () => {
             type="text"
             className="search-input"
             placeholder="Masukkan Nomor Sales Order..."
-            style={{ padding: '14px 14px 14px 48px', width: '100%', fontSize: '16px' }}
+            style={{ padding: '14px 14px 14px 48px', width: '100%', fontSize: '16px', backgroundColor: '#ffffff', borderRadius: '12px' }}
             value={pickupCode}
             onChange={(e) => setPickupCode(e.target.value)}
           />
@@ -274,36 +381,47 @@ const ReceivePicking = () => {
               const totalItems = dn.items ? dn.items.reduce((sum, item) => sum + item.qty, 0) : 0;
               const customerName = dn.customer || dn.customer_name || '-';
               const soNumber = dn.against_sales_order || dn.sales_order || '-';
-              const pickupCodeStr = dn.pickup_code || dn.custom_pick_up_code || '-';
+              const pickupOption = dn.custom_event_pickup_option || '-';
+              const pickedBy = dn.custom_picked_by || dn.pickedBy || null;
               
               return (
-                <div key={dn.name} style={{ display: 'flex', flexDirection: 'column', padding: '12px 0', borderBottom: '1px dashed var(--border-color)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Delivery Note</div>
-                      <div style={{ fontWeight: '700', fontSize: '16px', marginBottom: '8px' }}>{dn.name}</div>
+                <div key={dn.name} style={{ display: 'flex', flexDirection: 'column', padding: '16px', backgroundColor: '#fff', border: '1px solid var(--border-color)', borderRadius: '12px', marginBottom: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <div style={{ fontWeight: '800', fontSize: '20px', color: 'var(--text-primary)' }}>{soNumber}</div>
+                      <div style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: '500' }}>{dn.name}</div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--success-color)', fontWeight: '600', fontSize: '12px', backgroundColor: 'rgba(34, 197, 94, 0.1)', padding: '4px 8px', borderRadius: '12px' }}>
-                      <CheckCircle size={12} /> Dipicking
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--success-color)', fontWeight: '600', fontSize: '12px', backgroundColor: 'rgba(34, 197, 94, 0.1)', padding: '6px 10px', borderRadius: '12px' }}>
+                      <CheckCircle size={14} /> Dipicking
                     </div>
                   </div>
+
+                  {customerName && customerName !== '-' && (
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', fontSize: '14px', color: 'var(--text-primary)' }}>
+                      <User size={16} color="var(--text-muted)" style={{ flexShrink: 0, marginTop: '2px' }} />
+                      <span style={{ fontWeight: '500', wordBreak: 'break-word' }}>{customerName}</span>
+                    </div>
+                  )}
+
+                  {pickedBy && (
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', fontSize: '14px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                      <UserCheck size={16} color="var(--success-color)" style={{ flexShrink: 0, marginTop: '2px' }} />
+                      <span style={{ fontWeight: '500', wordBreak: 'break-word', color: 'var(--success-color)' }}>Picker: {pickedBy}</span>
+                    </div>
+                  )}
                   
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '13px', backgroundColor: 'var(--bg-secondary)', padding: '10px', borderRadius: '8px', marginTop: '4px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>Customer</span>
-                      <span style={{ fontWeight: '600' }}>{customerName}</span>
+                  <div style={{ display: 'flex', gap: '16px', fontSize: '14px', color: 'var(--text-secondary)', marginTop: '8px', paddingTop: '12px', borderTop: '1px dashed var(--border-color)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <div style={{ fontWeight: '600', color: 'var(--text-primary)' }}>
+                        {dn.items?.length || 0} Produk
+                      </div>
+                      <div style={{ color: 'var(--text-secondary)' }}>
+                        ({totalItems} pcs)
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>Sales Order</span>
-                      <span style={{ fontWeight: '600' }}>{soNumber}</span>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>Sales Order</span>
-                      <span style={{ fontWeight: '600' }}>{dn.against_sales_order || '-'}</span>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>Total Item</span>
-                      <span style={{ fontWeight: '600' }}>{totalItems}</span>
+                    <div style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: 'var(--border-color)', alignSelf: 'center' }}></div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      Booth: <span style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{pickupOption}</span>
                     </div>
                   </div>
                 </div>

@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { getPendingSalesOrders } from '../api/salesOrder';
 import { 
   fetchDeliveryNotes as apiFetchDeliveryNotes,
+  fetchActiveDeliveryNotes as apiFetchActiveDeliveryNotes,
   getDeliveryNoteWithItems,
   claimDeliveryNote, 
   updateDeliveryNoteItemPicked, 
@@ -19,7 +20,8 @@ export const useOrders = () => useContext(OrderContext);
 export const OrderProvider = ({ children }) => {
   const { isAuthenticated, user } = useAuth();
   const [orders, setOrders] = useState([]); // Pending SOs
-  const [deliveryNotes, setDeliveryNotes] = useState([]); // DNs
+  const [deliveryNotes, setDeliveryNotes] = useState([]); // DNs available
+  const [activeDeliveryNotes, setActiveDeliveryNotes] = useState([]); // DNs active
   const [activeOrder, setActiveOrder] = useState(null); // Selected DN for picking
   const [loading, setLoading] = useState(false);
   const [ordersError, setOrdersError] = useState(null);
@@ -79,48 +81,53 @@ export const OrderProvider = ({ children }) => {
     }
   };
 
-  const fetchDeliveryNotes = async () => {
+  const fetchDeliveryNotes = useCallback(async (searchQuery = '') => {
     setLoading(true);
     setDnError(null);
     try {
-      const data = await apiFetchDeliveryNotes(1, 100); 
-      if (data) {
-        const mappedDNs = data.map(item => {
-          console.log('[HOME] Delivery Note SO', {
-            name: item.name,
-            against_sales_order: item.against_sales_order,
-          });
-          
-          return {
-            deliveryNoteNo: item.name,
-          customer: item.customer,
-          postingDate: item.posting_date,
-          status: item.status,
-          docstatus: item.status === 'Draft' ? 0 : 1, // Fallback for filtering compatibility
-          isPicked: isFrappeChecked(item.custom_event_is_picked),
-          pickedBy: item.custom_picked_by,
-          pickupCode: item.pickup_code,
-          salesOrderNo: item.against_sales_order,
-          custom_event_pickup_option: item.custom_event_pickup_option,
-          items: (item.items || []).map(i => ({
-            name: i.name ?? null,
-            itemCode: i.item_code ?? '',
-            itemName: i.item_name ?? '',
-            qty: Number(i.qty ?? 0),
-            warehouse: i.warehouse ?? '',
-            isPicked: isFrappeChecked(i.is_picked)
-          }))
-          };
-        });
-        setDeliveryNotes(mappedDNs);
+      const [availableData, activeData] = await Promise.all([
+        apiFetchDeliveryNotes(searchQuery, 1, 100),
+        apiFetchActiveDeliveryNotes(searchQuery, 1, 100)
+      ]); 
+
+      const mapDNs = (data) => data.map(item => ({
+        deliveryNoteNo: item.name,
+        customer: item.customer,
+        postingDate: item.posting_date,
+        postingTime: item.posting_time,
+        status: item.status,
+        docstatus: item.status === 'Draft' ? 0 : 1,
+        isPicked: isFrappeChecked(item.custom_event_is_picked),
+        pickedBy: item.custom_picked_by,
+        pickupCode: item.pickup_code,
+        salesOrderNo: item.against_sales_order,
+        custom_event_pickup_option: item.custom_event_pickup_option,
+        custom_event_booth: item.custom_event_booth,
+        items: (item.items || []).map(i => ({
+          name: i.name ?? null,
+          itemCode: i.item_code ?? '',
+          itemName: i.item_name ?? '',
+          qty: Number(i.qty ?? 0),
+          warehouse: i.warehouse ?? '',
+          isPicked: isFrappeChecked(i.is_picked)
+        }))
+      }));
+
+      if (availableData) {
+        setDeliveryNotes(mapDNs(availableData));
+      }
+      
+      if (activeData) {
+        setActiveDeliveryNotes(mapDNs(activeData));
       }
     } catch (err) {
       setDnError(parseApiError(err, 'Data Delivery Note tidak dapat dimuat.'));
       setDeliveryNotes([]);
+      setActiveDeliveryNotes([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -129,6 +136,7 @@ export const OrderProvider = ({ children }) => {
     } else {
       setOrders([]);
       setDeliveryNotes([]);
+      setActiveDeliveryNotes([]);
       setOrdersError(null);
       setDnError(null);
     }
@@ -461,6 +469,7 @@ export const OrderProvider = ({ children }) => {
     <OrderContext.Provider value={{
       orders,
       deliveryNotes,
+      activeDeliveryNotes,
       activeOrder,
       loading,
       ordersError,
@@ -479,6 +488,7 @@ export const OrderProvider = ({ children }) => {
       fetchOrders,
       fetchDeliveryNotes,
       toast,
+      showToast,
       lastPickedOrder,
       activePickingId,
       setLastPickedOrder

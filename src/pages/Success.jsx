@@ -11,7 +11,15 @@ const Success = () => {
   const [pickupCodeCopied, setPickupCodeCopied] = useState(false);
   const [showNextOrderConfirmation, setShowNextOrderConfirmation] = useState(false);
 
-  const { orderId, type, customPickUpCode } = location.state || {};
+  const { 
+    orderId, // This is Delivery Note No
+    salesOrderNo,
+    customer,
+    booth,
+    totalItems,
+    type, 
+    customPickUpCode 
+  } = location.state || {};
 
   useEffect(() => {
     // Clear active order context when reaching success page
@@ -76,7 +84,38 @@ const Success = () => {
       </div>
 
       <h2 className="text-xl mb-4" style={{ color: 'var(--success-color)' }}>{title}</h2>
-      <p className="text-primary mb-2">Order <strong>#{orderId}</strong></p>
+      
+      <h1 style={{ fontWeight: '800', fontSize: '28px', margin: '0 0 4px 0', color: 'var(--text-primary)', wordBreak: 'break-word' }}>
+        {salesOrderNo || '-'}
+      </h1>
+      <p className="text-secondary mb-4" style={{ fontSize: '14px', fontWeight: '500' }}>{orderId}</p>
+
+      <div style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        gap: '8px', 
+        marginBottom: '16px',
+        width: '100%',
+        maxWidth: '320px',
+        textAlign: 'left',
+        backgroundColor: 'var(--bg-elevated)',
+        padding: '16px',
+        borderRadius: '12px',
+        border: '1px solid var(--border-color)'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Customer</span>
+          <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>{customer || '-'}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Booth</span>
+          <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>{booth || '-'}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Total Item</span>
+          <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>{totalItems || 0} item</span>
+        </div>
+      </div>
 
       {type === 'PICKUP_LATER' && (
         <div style={{ marginTop: '24px', marginBottom: '16px', border: '2px solid var(--border-color)', padding: '16px', borderRadius: '8px', width: '100%', maxWidth: '320px', backgroundColor: 'var(--bg-secondary)' }}>

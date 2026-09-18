@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOrders } from '../context/OrderContext';
-import { ChevronLeft, Check, Minus, Plus, Search, CameraOff, AlertCircle, Camera, X } from 'lucide-react';
+import { ChevronLeft, Check, Minus, Plus, Search, CameraOff, AlertCircle, ScanBarcode, X, User, Store } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 
 const playSuccessBeep = () => {
@@ -71,9 +71,16 @@ const Picking = () => {
       setTimeout(() => setScanFeedback(null), 2000);
       setIsScannerOpen(false); // Close modal on successful item match
     } else {
-      // The toast is already shown by incrementPickedQty in context, 
-      // but we can set local feedback if needed.
-      setTimeout(() => setScanFeedback(null), 2000);
+      if (isScannerOpen) {
+        setCameraState('scanning_error');
+        setCameraErrorMsg('Item tidak ada');
+        setTimeout(() => {
+          setCameraState(prev => prev === 'scanning_error' ? 'active' : prev);
+        }, 2500);
+      } else {
+        setScanFeedback('✗ Item tidak ada');
+        setTimeout(() => setScanFeedback(null), 2000);
+      }
     }
   };
 
@@ -94,6 +101,10 @@ const Picking = () => {
       navigate('/success', { 
         state: { 
           orderId: activeOrder.deliveryNoteNo, 
+          salesOrderNo: activeOrder.against_sales_order || activeOrder.salesOrderNo || '-',
+          customer: activeOrder.customer,
+          booth: activeOrder.custom_event_pickup_option,
+          totalItems: totalRequired,
           type: result.custom_event_pickup_option || 'UNKNOWN',
           customPickUpCode: result.pickupCode
         } 
@@ -236,36 +247,42 @@ const Picking = () => {
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
-      {/* HEADER SECTION */}
-      <div className="header" style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingBottom: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button 
-            className="icon-btn" 
-            onClick={handleBack} 
-            aria-label="Kembali" 
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: '44px', minHeight: '44px' }}
-          >
-            <ChevronLeft size={24} />
-          </button>
-          <div style={{ flexGrow: 1, minWidth: 0 }}>
-            <h1 className="text-xl" style={{ fontWeight: '700', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              Mulai Picking
-            </h1>
-            <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
-              {activeOrder.deliveryNoteNo}
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', backgroundColor: 'var(--bg-primary)', overflow: 'hidden' }}>
+      <div className="header" style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingBottom: '16px', flexShrink: 0 }}>
+        <div 
+          onClick={handleBack}
+          style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--text-secondary)', cursor: 'pointer', fontWeight: '500', width: 'fit-content' }}
+        >
+          <ChevronLeft size={20} style={{ marginLeft: '-4px' }} />
+          Kembali
+        </div>
+
+        <div>
+          <div style={{ fontSize: '13px', color: 'var(--accent-primary)', fontWeight: '700', marginBottom: '4px' }}>
+            PROSES PICKING
+          </div>
+          <h1 style={{ fontWeight: '800', fontSize: '28px', margin: 0, color: 'var(--text-primary)', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+            {activeOrder.against_sales_order || activeOrder.salesOrderNo || '-'}
+          </h1>
+          <div style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: '500', marginTop: '4px' }}>
+            {activeOrder.deliveryNoteNo}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: 0 }}>
+              <User size={16} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+              <span style={{ fontSize: '14px', color: 'var(--text-primary)', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{activeOrder.customer || '-'}</span>
             </div>
-            { (activeOrder.against_sales_order || activeOrder.salesOrderNo) && (
-              <div style={{ fontSize: '15px', color: 'var(--text-primary)', marginTop: '4px' }}>
-                Sales Order: <span style={{ fontWeight: '700', color: 'var(--accent-primary)' }}>{activeOrder.against_sales_order || activeOrder.salesOrderNo}</span>
-              </div>
-            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: 0 }}>
+              <Store size={16} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+              <span style={{ fontSize: '14px', color: 'var(--text-primary)', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{activeOrder.custom_event_pickup_option || '-'}</span>
+            </div>
           </div>
         </div>
       </div>
 
       {/* PROGRESS SECTION */}
-      <div style={{ padding: '16px', backgroundColor: 'var(--bg-elevated)', borderBottom: '1px solid var(--border-color)' }}>
+      <div style={{ padding: '16px', backgroundColor: 'var(--bg-elevated)', borderBottom: '1px solid var(--border-color)', flexShrink: 0 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ fontWeight: '600', fontSize: '13px', color: 'var(--text-secondary)' }}>
@@ -282,56 +299,62 @@ const Picking = () => {
         <div style={{ textAlign: 'right', fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px', fontWeight: '500' }}>
           {Math.round(progressPercent)}%
         </div>
-        {isFullyPicked ? (
+        {isFullyPicked && (
           <div style={{ textAlign: 'center', color: 'var(--success-color)', fontSize: '14px', fontWeight: '600', marginTop: '12px' }}>
             Picking Selesai
-          </div>
-        ) : (
-          <div style={{ textAlign: 'center', color: 'var(--text-primary)', fontSize: '14px', fontWeight: '500', marginTop: '12px' }}>
-            Scan item berikutnya
           </div>
         )}
       </div>
 
-      {/* CAMERA SCANNER BUTTON */}
-      <div style={{ padding: '16px', backgroundColor: 'var(--bg-primary)', display: 'flex', justifyContent: 'center' }}>
-        <button 
-          className="btn btn-primary" 
-          onClick={() => setIsScannerOpen(true)}
-          disabled={isFullyPicked}
-          style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', padding: '14px', fontSize: '15px' }}
-        >
-          <Camera size={20} />
-          Scan Item dengan Kamera
-        </button>
-      </div>
-      
-      {/* Search and hidden input for scanner simulation */}
-      <div style={{ padding: '16px', backgroundColor: 'var(--bg-elevated)', borderBottom: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      <div style={{ padding: '16px', backgroundColor: 'var(--bg-elevated)', borderBottom: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '12px', flexShrink: 0 }}>
         <div style={{ position: 'relative' }}>
           <Search style={{ position: 'absolute', top: '12px', left: '16px', color: 'var(--text-muted)' }} size={20} />
           <input
             type="text"
             className="search-input"
             placeholder="Cari produk manual..."
-            style={{ padding: '12px 12px 12px 48px', width: '100%' }}
+            style={{ padding: '12px 12px 12px 48px', width: '100%', borderRadius: '8px' }}
             value={productSearch}
             onChange={(e) => setProductSearch(e.target.value)}
           />
         </div>
-        <form onSubmit={handleBarcodeSubmit}>
+        <form onSubmit={handleBarcodeSubmit} style={{ position: 'relative' }}>
           <input 
             type="text" 
             value={barcodeInput}
             onChange={(e) => setBarcodeInput(e.target.value)}
-            placeholder="Simulasi Scan Barcode (Ketik & Enter)"
+            placeholder="Ketik barcode manual..."
             className="search-input"
-            style={{ padding: '12px', width: '100%', fontSize: '12px' }}
+            style={{ padding: '14px 56px 14px 16px', width: '100%', borderRadius: '12px', fontSize: '15px' }}
           />
+          <button 
+            type="button"
+            onClick={() => setIsScannerOpen(true)}
+            disabled={isFullyPicked}
+            style={{ 
+              position: 'absolute',
+              right: '6px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              background: 'var(--accent-primary)',
+              color: 'white',
+              border: 'none',
+              width: '40px',
+              height: '40px',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: isFullyPicked ? 'not-allowed' : 'pointer',
+              opacity: isFullyPicked ? 0.5 : 1
+            }}
+          >
+            <ScanBarcode size={20} />
+          </button>
         </form>
       </div>
 
-      <div style={{ padding: '12px 16px', backgroundColor: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative' }}>
+      <div style={{ padding: '12px 16px', backgroundColor: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', flexShrink: 0 }}>
         <span style={{ fontWeight: '600', fontSize: '14px' }}>Daftar Barang</span>
         
         {scanFeedback && (
@@ -340,8 +363,8 @@ const Picking = () => {
             top: '50%',
             left: '50%',
             transform: 'translate(-50%, -50%)',
-            backgroundColor: 'var(--text-primary)',
-            color: 'var(--bg-primary)',
+            backgroundColor: scanFeedback.startsWith('✓') ? 'var(--text-primary)' : 'var(--error-color)',
+            color: scanFeedback.startsWith('✓') ? 'var(--bg-primary)' : 'white',
             padding: '6px 12px',
             borderRadius: '16px',
             fontSize: '12px',
@@ -493,7 +516,7 @@ const Picking = () => {
         })}
       </div>
 
-      <div className="sticky-bottom" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div className="sticky-bottom" style={{ display: 'flex', flexDirection: 'column', gap: '16px', flexShrink: 0 }}>
         {submitError && (
           <div style={{ 
             backgroundColor: 'rgba(239, 68, 68, 0.1)', 
@@ -582,6 +605,12 @@ const Picking = () => {
                 <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: '#ef4444', textAlign: 'center', padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', zIndex: 10 }}>
                   <CameraOff size={32} />
                   <span style={{ fontSize: '14px' }}>{cameraErrorMsg}</span>
+                </div>
+              )}
+              {cameraState === 'scanning_error' && (
+                <div style={{ position: 'absolute', top: '16px', left: '50%', transform: 'translateX(-50%)', color: 'white', backgroundColor: '#ef4444', textAlign: 'center', padding: '8px 16px', borderRadius: '24px', display: 'flex', alignItems: 'center', gap: '8px', zIndex: 20, boxShadow: '0 4px 12px rgba(239, 68, 68, 0.4)', fontWeight: '600', fontSize: '14px', whiteSpace: 'nowrap' }}>
+                  <AlertCircle size={18} />
+                  <span>{cameraErrorMsg}</span>
                 </div>
               )}
               <div 

@@ -150,6 +150,17 @@ export const submitFrappeDeliveryNote = async (dn) => {
   return response.message || response.data || response;
 };
 
+export const submitDeliveryNotesBatch = async (deliveryNoteNames) => {
+  // Try to use endpoint from env, or default to the provided endpoint
+  const endpoint = import.meta.env.VITE_API_DELIVERY_NOTES_BATCH_ENDPOINT || '/api/method/thunder_erp.api.dn_picker.delivery_note_submit_batch';
+  
+  const response = await apiClient.post(endpoint, {
+    names: deliveryNoteNames
+  });
+  
+  return response;
+};
+
 /**
  * Find Delivery Notes by Sales Order
  * @param {string} salesOrderName 
@@ -196,7 +207,7 @@ export const findSubmittedDeliveryNotesBySalesOrder = async (salesOrderName) => 
       filters: JSON.stringify([
         ['name', 'in', dnNames]
       ]),
-      fields: JSON.stringify(['name', 'docstatus', 'custom_event_is_picked', 'custom_pick_up_code', 'customer', 'customer_name', 'total_qty', 'grand_total', 'custom_event_pickup_option']),
+      fields: JSON.stringify(['name', 'docstatus', 'custom_event_is_picked', 'custom_pick_up_code', 'customer', 'customer_name', 'total_qty', 'grand_total', 'custom_event_pickup_option', 'custom_picked_by']),
       limit_page_length: 100
     });
     

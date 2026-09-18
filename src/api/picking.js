@@ -4,30 +4,66 @@ import { isFrappeChecked } from '../utils/frappeUtils';
 /**
  * Fetch active/available Delivery Notes for picking.
  */
-export const fetchDeliveryNotes = async (page = 1, limit = 20) => {
+export const fetchDeliveryNotes = async (searchQuery = '', page = 1, limit = 20) => {
   const endpoint = '/api/method/thunder_erp.api.dn_picker.get_delivery_note';
   
-  const response = await apiClient.get(endpoint, {
-    include_items: 1
-  });
+  const params = {
+    include_items: 1,
+    custom_event_is_picked: 0,
+    custom_picked_by: '["is","not set"]'
+  };
+  if (searchQuery) {
+    params.sales_order = searchQuery;
+  }
   
-  console.log('[HOME] dn_picker raw response', response);
+  const response = await apiClient.get(endpoint, params);
+  
+  console.log('[HOME] dn_picker available response', response);
   
   const list = response?.message;
   
   if (!list) {
-    console.log('[HOME] No Delivery Notes found (empty message).');
     return [];
   }
   
   if (!Array.isArray(list)) {
-    console.error('[HOME] Invalid delivery note response format (not an array)', list);
-    throw new Error('Invalid delivery note response');
+    console.error('[HOME] Invalid delivery note response format', list);
+    return [];
   }
   
-  console.log('[HOME] Delivery Note list', list);
   return list;
 };
+
+export const fetchActiveDeliveryNotes = async (searchQuery = '', page = 1, limit = 20) => {
+  const endpoint = '/api/method/thunder_erp.api.dn_picker.get_delivery_note';
+  
+  const params = {
+    include_items: 1,
+    custom_event_is_picked: 0,
+    custom_picked_by: '["is","set"]'
+  };
+  if (searchQuery) {
+    params.sales_order = searchQuery;
+  }
+  
+  const response = await apiClient.get(endpoint, params);
+  
+  console.log('[HOME] dn_picker active response', response);
+  
+  const list = response?.message;
+  
+  if (!list) {
+    return [];
+  }
+  
+  if (!Array.isArray(list)) {
+    console.error('[HOME] Invalid active delivery note response format', list);
+    return [];
+  }
+  
+  return list;
+};
+
 
 
 /**
