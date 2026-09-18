@@ -1,8 +1,15 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { getDeliveryNotes as apiGetDeliveryNotes, createDeliveryNoteFromSalesOrder, submitDeliveryNotePicking } from '../api/deliveryNote';
 import { getPendingSalesOrders } from '../api/salesOrder';
+import { 
+  fetchDeliveryNotes as apiFetchDeliveryNotes,
+  getDeliveryNoteWithItems,
+  claimDeliveryNote, 
+  updateDeliveryNoteItemPicked, 
+  completeDeliveryNotePicking 
+} from '../api/picking';
 import { parseApiError } from '../utils/errorHandler';
 import { useAuth } from './AuthContext';
+import { isFrappeChecked } from '../utils/frappeUtils';
 
 const OrderContext = createContext(null);
 
@@ -19,6 +26,11 @@ export const OrderProvider = ({ children }) => {
   const [dnError, setDnError] = useState(null);
   const [activeOrderError, setActiveOrderError] = useState(null);
   const [toast, setToast] = useState(null);
+  
+  const [activePickingId, setActivePickingId] = useState(() => {
+    return localStorage.getItem('murni_active_picking') || null;
+  });
+
   const [lastPickedOrder, setLastPickedOrder] = useState(() => {
     try {
       const saved = localStorage.getItem('lastPickedOrder');
@@ -32,6 +44,17 @@ export const OrderProvider = ({ children }) => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   };
+
+  const getCurrentUserIdentifier = () => {
+    return user?.email || user?.name || user?.username;
+  };
+
+  useEffect(() => {
+    if (user) {
+      console.log('[AUTH] Current user:', user);
+      console.log('[AUTH] User identifier:', getCurrentUserIdentifier());
+    }
+  }, [user]);
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -60,27 +83,35 @@ export const OrderProvider = ({ children }) => {
     setLoading(true);
     setDnError(null);
     try {
-      const data = await apiGetDeliveryNotes('', 1, 20); // List general
+      const data = await apiFetchDeliveryNotes(1, 100); 
       if (data) {
-        const mappedDNs = data.map(item => ({
-          deliveryNoteNo: item.name,
-          salesOrderNo: item.against_sales_order,
+        const mappedDNs = data.map(item => {
+          console.log('[HOME] Delivery Note SO', {
+            name: item.name,
+            against_sales_order: item.against_sales_order,
+          });
+          
+          return {
+            deliveryNoteNo: item.name,
           customer: item.customer,
           postingDate: item.posting_date,
           status: item.status,
-          poNo: item.po_no,
-          customPickupLater: item.custom_pickup_later,
-          customPickUpCode: item.custom_pick_up_code,
-          items: item.items ? item.items.map(i => ({
-            itemCode: i.item_code,
-            itemName: i.item_name,
-            qty: i.qty,
-            warehouse: i.warehouse,
-            // Add state tracking for picking
-            orderedQty: i.qty,
-            pickedQty: 0
-          })) : []
-        }));
+          docstatus: item.status === 'Draft' ? 0 : 1, // Fallback for filtering compatibility
+          isPicked: isFrappeChecked(item.custom_event_is_picked),
+          pickedBy: item.custom_picked_by,
+          pickupCode: item.pickup_code,
+          salesOrderNo: item.against_sales_order,
+          custom_event_pickup_option: item.custom_event_pickup_option,
+          items: (item.items || []).map(i => ({
+            name: i.name ?? null,
+            itemCode: i.item_code ?? '',
+            itemName: i.item_name ?? '',
+            qty: Number(i.qty ?? 0),
+            warehouse: i.warehouse ?? '',
+            isPicked: isFrappeChecked(i.is_picked)
+          }))
+          };
+        });
         setDeliveryNotes(mappedDNs);
       }
     } catch (err) {
@@ -122,9 +153,77 @@ export const OrderProvider = ({ children }) => {
     return false;
   };
 
-  const selectDeliveryNote = (dnObject) => {
-    setActiveOrder(dnObject);
+  // Load details without claiming (when card is clicked)
+  const loadDeliveryNoteDetail = async (dnName) => {
+    try {
+      console.log('[PICKING] Loading Delivery Note detail', dnName);
+      const dnDetail = await getDeliveryNoteWithItems(dnName);
+      console.log('[PICKING] Delivery Note detail loaded', dnDetail);
+      
+      return {
+        docstatus: dnDetail?.docstatus,
+        isPicked: isFrappeChecked(dnDetail?.custom_event_is_picked),
+        pickupCode: dnDetail?.pickup_code,
+        custom_event_pickup_option: dnDetail?.custom_event_pickup_option,
+        items: dnDetail?.items || [],
+      };
+    } catch (err) {
+      console.error('Failed to load DN detail:', err);
+      return null;
+    }
+  };
+
+  const selectDeliveryNote = async (dnObject) => {
     setActiveOrderError(null);
+    setLoading(true);
+    try {
+      const currentUser = getCurrentUserIdentifier();
+      if (!currentUser) {
+        showToast('Claim gagal: current ERPNext user tidak tersedia.', 'error');
+        setActiveOrderError('Claim gagal: user tidak tersedia.');
+        setLoading(false);
+        return;
+      }
+
+      if (dnObject.pickedBy && dnObject.pickedBy !== currentUser) {
+        showToast('Claim ditolak: Delivery Note sedang digunakan oleh user lain.', 'error');
+        setActiveOrderError('Delivery Note sedang digunakan.');
+        setLoading(false);
+        return;
+      }
+      
+      // If already claimed by current user, skip the API call
+      if (dnObject.pickedBy !== currentUser) {
+        const response = await claimDeliveryNote(dnObject.deliveryNoteNo, currentUser);
+        console.log('[PICKING] Claim response', response);
+      } else {
+        console.log('[PICKING] DN already claimed by current user, skipping API call');
+      }
+
+      setActiveOrder({
+        ...dnObject,
+        pickedBy: currentUser,
+        items: (dnObject.items || []).map(i => ({
+          ...i,
+          pickedQty: 0,
+          isPicked: false
+        }))
+      });
+      
+      localStorage.setItem('murni_active_picking', dnObject.deliveryNoteNo);
+      setActivePickingId(dnObject.deliveryNoteNo);
+
+      // We don't refresh all delivery notes immediately to avoid jitter, 
+      // but it will be updated next time Home mounts
+      return true;
+    } catch (err) {
+      console.error('[PICKING] Claim failed', err);
+      showToast('Gagal memproses Delivery Note atau sudah diambil orang lain.', 'error');
+      setActiveOrderError('Gagal claim Delivery Note.');
+      return false;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const selectOrder = async (orderNumber) => {
@@ -135,51 +234,119 @@ export const OrderProvider = ({ children }) => {
   const clearActiveOrder = () => {
     setActiveOrder(null);
     setActiveOrderError(null);
+    // TODO:
+    // Future feature: release/cancel picking claim
+    // so another user can claim this Delivery Note.
   };
 
-  const updateQuantity = (itemCode, delta) => {
-    if (!activeOrder) return;
-    
-    setActiveOrder(prev => {
-      const newItems = prev.items.map(item => {
-        if (item.itemCode === itemCode) {
-          const newQty = item.pickedQty + delta;
-          if (newQty < 0) return item;
-          if (newQty > item.orderedQty) {
-            showToast('Produk melebihi pesanan. Kembalikan ke rak.', 'error');
-            return item;
-          }
-          return { ...item, pickedQty: newQty };
-        }
-        return item;
+  const resumePicking = async (dnName) => {
+    setLoading(true);
+    try {
+      const currentUser = getCurrentUserIdentifier();
+      if (!currentUser) {
+        showToast('Current user tidak tersedia', 'error');
+        return false;
+      }
+
+      let dnDetail;
+      try {
+        dnDetail = await getDeliveryNoteWithItems(dnName);
+      } catch (fetchError) {
+        console.error('[Resume Picking Error]', fetchError);
+        showToast('Gagal mengambil data picking. Silakan coba lagi.', 'error');
+        return false; // Network or API error, do NOT clear localStorage
+      }
+      
+      console.log('[Resume Picking]', {
+        dnName,
+        currentUser,
+        foundDn: dnDetail?.name,
+        pickedBy: dnDetail?.custom_picked_by,
+        isPicked: dnDetail?.custom_event_is_picked
       });
-      return { ...prev, items: newItems };
-    });
+
+      if (!dnDetail) {
+        localStorage.removeItem('murni_active_picking');
+        setActivePickingId(null);
+        showToast('Delivery Note tidak ditemukan', 'error');
+        return false;
+      }
+
+      if (isFrappeChecked(dnDetail.custom_event_is_picked)) {
+        localStorage.removeItem('murni_active_picking');
+        setActivePickingId(null);
+        showToast('Delivery Note sudah selesai', 'error');
+        return false;
+      }
+
+      if (dnDetail.custom_picked_by !== currentUser) {
+        localStorage.removeItem('murni_active_picking');
+        setActivePickingId(null);
+        showToast('Picking ini tidak lagi menjadi milik user Anda.', 'error');
+        return false;
+      }
+
+      setActiveOrder({
+        ...dnDetail,
+        pickedBy: currentUser, // Set standard property for consistency in UI
+        items: dnDetail.items.map(i => ({
+          ...i,
+          pickedQty: 0,
+          isPicked: false
+        }))
+      });
+      return true;
+    } catch (err) {
+      console.error('[Resume Picking Error]', err);
+      showToast('Gagal me-resume picking. Silakan coba lagi.', 'error');
+      return false;
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const scanProduct = (barcode) => {
+  const incrementPickedQty = async (barcode) => {
     if (!activeOrder) return;
     
-    const orderItemIndex = activeOrder.items.findIndex(i => i.itemCode === barcode);
-    if (orderItemIndex === -1) {
-      showToast('Produk tidak ada di pesanan.', 'error');
-      return;
-    }
-
-    updateQuantity(activeOrder.items[orderItemIndex].itemCode, 1);
-  };
-
-  const completeOrder = async (pickupLater = false) => {
-    if (!activeOrder) return false;
+    // Find item matching the barcode
+    const itemIndex = activeOrder.items.findIndex(i => 
+      (i.barcode && i.barcode === barcode) || 
+      i.itemCode === barcode
+    );
     
-    // Validation for logged-in user
-    const loggedInUserEmail = user?.username;
-    if (!loggedInUserEmail || loggedInUserEmail.toLowerCase() === 'guest') {
-      showToast('User login email is required for picking submission', 'error');
+    if (itemIndex === -1) {
+      showToast('Barcode tidak ditemukan pada Delivery Note.', 'error');
       return false;
     }
+
+    const itemToPick = activeOrder.items[itemIndex];
+    const currentQty = itemToPick.pickedQty || 0;
+    const maxQty = itemToPick.qty || 0;
+
+    if (currentQty >= maxQty) {
+      showToast('Qty sudah terpenuhi.', 'error');
+      return false;
+    }
+
+    // Update frontend state only
+    setActiveOrder(prev => {
+      const newItems = [...prev.items];
+      const newQty = Math.min(currentQty + 1, maxQty);
+      newItems[itemIndex] = { 
+        ...newItems[itemIndex], 
+        pickedQty: newQty,
+        isPicked: newQty >= maxQty 
+      };
+      return { ...prev, items: newItems };
+    });
     
-    const isFullyPicked = activeOrder.items.every(i => i.pickedQty === i.orderedQty);
+    return true;
+  };
+
+  const completeOrder = async () => {
+    if (!activeOrder) return false;
+    
+    const isFullyPicked = activeOrder.items.every(i => i.isPicked);
     if (!isFullyPicked) {
       showToast('Masih ada produk yang belum diambil.', 'error');
       return false;
@@ -187,19 +354,16 @@ export const OrderProvider = ({ children }) => {
 
     setLoading(true);
     try {
-      // Map back to ERPNext format for submission
-      const updatedItems = activeOrder.items.map(item => ({
-        item_code: item.itemCode,
-        qty: item.pickedQty
-      }));
+      const submitRes = await completeDeliveryNotePicking(activeOrder.deliveryNoteNo);
       
-      const submitRes = await submitDeliveryNotePicking(activeOrder.deliveryNoteNo, updatedItems, pickupLater, loggedInUserEmail);
-      
+      localStorage.removeItem('murni_active_picking');
+      setActivePickingId(null);
+
       const newLastPicked = {
         name: activeOrder.deliveryNoteNo,
         customer: activeOrder.customer,
-        customPickupLater: pickupLater ? 1 : 0,
-        customPickUpCode: submitRes?.custom_pick_up_code || activeOrder.customPickUpCode || null
+        custom_event_pickup_option: activeOrder.custom_event_pickup_option,
+        pickupCode: submitRes?.custom_pick_up_code || activeOrder.pickupCode || null
       };
       
       setLastPickedOrder(newLastPicked);
@@ -209,7 +373,7 @@ export const OrderProvider = ({ children }) => {
       fetchDeliveryNotes(); // Refresh list
       return newLastPicked;
     } catch {
-      showToast('Data picking belum berhasil dikirim ke server. Silakan coba lagi.', 'error');
+      showToast('Data picking belum berhasil diselesaikan di server. Silakan coba lagi.', 'error');
       return false;
     } finally {
       setLoading(false);
@@ -227,15 +391,17 @@ export const OrderProvider = ({ children }) => {
       activeOrderError,
       selectOrder,
       createDN,
+      loadDeliveryNoteDetail,
       selectDeliveryNote,
       clearActiveOrder,
-      updateQuantity,
-      scanProduct,
+      resumePicking,
+      incrementPickedQty,
       completeOrder,
       fetchOrders,
       fetchDeliveryNotes,
       toast,
       lastPickedOrder,
+      activePickingId,
       setLastPickedOrder
     }}>
       {children}

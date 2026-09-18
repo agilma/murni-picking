@@ -42,16 +42,14 @@ export const createDeliveryNoteFromSalesOrder = async (salesOrder) => {
  * Submit picked items for a delivery note
  * Payload adapter preps for pickup_later if backend eventually supports it.
  */
-export const buildDeliveryNoteSubmitPayload = ({ deliveryNoteNo, items, pickupLater, pickedBy }) => {
+export const buildDeliveryNoteSubmitPayload = ({ deliveryNoteNo, items, pickedBy }) => {
   const payload = {
     name: deliveryNoteNo,
-    items: items,
-    custom_pickup_later: pickupLater ? 1 : 0
+    items: items
   };
   
   if (pickedBy) {
     payload.custom_picked_by = pickedBy;
-    payload.picked_by = pickedBy;
   }
   
   console.log('Submit Picking payload:', payload);
@@ -66,13 +64,13 @@ export const buildDeliveryNoteSubmitPayload = ({ deliveryNoteNo, items, pickupLa
  * @param {boolean} pickupLater - Whether to pickup later
  * @param {string} pickedBy - Email or username of the person picking
  */
-export const submitDeliveryNotePicking = async (name, items, pickupLater = false, pickedBy = null) => {
+export const submitDeliveryNotePicking = async (name, items, pickedBy = null) => {
   const endpoint = import.meta.env.VITE_API_DELIVERY_NOTE_ENDPOINT;
   if (!endpoint) {
     throw new Error('Missing VITE_API_DELIVERY_NOTE_ENDPOINT in environment variables');
   }
 
-  const payload = buildDeliveryNoteSubmitPayload({ deliveryNoteNo: name, items, pickupLater, pickedBy });
+  const payload = buildDeliveryNoteSubmitPayload({ deliveryNoteNo: name, items, pickedBy });
 
   const response = await apiClient.post(endpoint, payload);
   return response.message || null;
@@ -123,4 +121,39 @@ export const getDeliveryNoteDetail = async (deliveryNoteName) => {
   const response = await apiClient.get(endpoint);
   
   return response?.data || null;
+};
+
+/**
+ * Standard Frappe submit mechanism for Delivery Note
+ * @param {string} deliveryNoteName 
+ */
+export const submitDeliveryNote = async (deliveryNoteName) => {
+  const endpoint = import.meta.env.VITE_API_DELIVERY_NOTE_ENDPOINT;
+  if (!endpoint) {
+    throw new Error('Missing VITE_API_DELIVERY_NOTE_ENDPOINT in environment variables');
+  }
+  
+  const response = await apiClient.post(endpoint, {
+    name: deliveryNoteName
+  });
+  
+  return response.message || response.data || response;
+};
+
+/**
+ * Find Delivery Notes by Sales Order
+ * @param {string} salesOrderName 
+ */
+export const findDeliveryNotesBySalesOrder = async (salesOrderName) => {
+  if (!salesOrderName) return [];
+  
+  const endpoint = '/api/method/thunder_erp.api.dn_picker.get_delivery_note';
+  
+  const response = await apiClient.get(endpoint, {
+    sales_order: salesOrderName,
+    include_items: 1
+  });
+  
+  const list = response?.message || [];
+  return Array.isArray(list) ? list : [];
 };

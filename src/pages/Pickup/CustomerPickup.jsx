@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, QrCode, AlertCircle, CheckCircle, Smartphone } from 'lucide-react';
+import { ChevronLeft, Barcode, AlertCircle, CheckCircle, Smartphone } from 'lucide-react';
 import { validatePickupQr, confirmPickup } from '../../services/pickupService';
 import PickupScanner from './PickupScanner';
 import ManualPickupCode from './ManualPickupCode';
@@ -90,7 +90,7 @@ const CustomerPickup = () => {
           <div style={{ display: 'flex', flexDirection: 'column', padding: '24px', alignItems: 'center', justifyContent: 'center', flexGrow: 1, textAlign: 'center', gap: '32px' }}>
             <div>
               <h2 className="text-xl mb-2">Pickup Pesanan</h2>
-              <p className="text-secondary">Ambil pesananmu dengan<br/>scan QR Code dari website Murni.</p>
+              <p className="text-secondary">Ambil pesananmu dengan<br/>scan Barcode dari website Murni.</p>
             </div>
             
             <div style={{ 
@@ -106,13 +106,13 @@ const CustomerPickup = () => {
               gap: '16px',
               backgroundColor: 'var(--bg-elevated)'
             }}>
-              <QrCode size={64} color="var(--text-muted)" />
+              <Barcode size={64} color="var(--text-muted)" />
               <span className="text-secondary">Scan untuk Pickup</span>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%', maxWidth: '320px' }}>
               <button className="btn btn-primary" onClick={() => setPickupState('scanning')}>
-                Scan QR Pickup
+                Scan Barcode Pickup
               </button>
               <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>atau</div>
               <button className="btn btn-secondary" onClick={() => setPickupState('manual-code')}>
@@ -139,7 +139,7 @@ const CustomerPickup = () => {
             <Smartphone size={64} color="var(--warning-color)" />
             <div>
               <h2 className="text-lg mb-2">Kamera Tidak Dapat Diakses</h2>
-              <p className="text-secondary">Izinkan akses kamera untuk melakukan<br/>scan QR Code.</p>
+              <p className="text-secondary">Izinkan akses kamera untuk melakukan<br/>scan Barcode.</p>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', maxWidth: '320px' }}>
               <button className="btn btn-primary" onClick={() => setPickupState('scanning')}>
@@ -181,8 +181,8 @@ const CustomerPickup = () => {
           <div style={{ padding: '24px', flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', gap: '24px' }}>
             <AlertCircle size={64} color="var(--error-color)" />
             <div>
-              <h2 className="text-lg mb-2">QR Code Tidak Valid</h2>
-              <p className="text-secondary">QR Code ini tidak dapat digunakan<br/>untuk pickup.</p>
+              <h2 className="text-lg mb-2">Barcode Tidak Valid</h2>
+              <p className="text-secondary">Barcode ini tidak dapat digunakan<br/>untuk pickup.</p>
             </div>
             <button className="btn btn-primary" onClick={() => setPickupState('scanning')} style={{ width: '100%', maxWidth: '320px' }}>
               Scan Lagi
@@ -195,8 +195,8 @@ const CustomerPickup = () => {
           <div style={{ padding: '24px', flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', gap: '24px' }}>
             <AlertCircle size={64} color="var(--warning-color)" />
             <div>
-              <h2 className="text-lg mb-2">QR Code Kedaluwarsa</h2>
-              <p className="text-secondary">QR Code pickup ini sudah tidak<br/>dapat digunakan.<br/><br/>Silakan gunakan QR Code terbaru.</p>
+              <h2 className="text-lg mb-2">Barcode Kedaluwarsa</h2>
+              <p className="text-secondary">Barcode pickup ini sudah tidak<br/>dapat digunakan.<br/><br/>Silakan gunakan Barcode terbaru.</p>
             </div>
             <button className="btn btn-primary" onClick={() => setPickupState('scanning')} style={{ width: '100%', maxWidth: '320px' }}>
               Scan Lagi

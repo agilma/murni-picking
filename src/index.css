@@ -297,7 +297,7 @@ html {
 /* Feedback Toasts */
 .toast-container {
   position: fixed;
-  bottom: 24px;
+  bottom: calc(var(--bottom-nav-height, 90px));
   left: 50%;
   transform: translateX(-50%);
   z-index: 50;

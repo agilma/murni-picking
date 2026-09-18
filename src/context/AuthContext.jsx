@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { login as apiLogin, logout as apiLogout, getLoggedUser } from '../api/auth';
+import { normalizeRoleProfile, getCapabilities } from '../utils/capabilities';
 
 const AuthContext = createContext();
 
@@ -14,7 +15,38 @@ export const AuthProvider = ({ children }) => {
         const response = await getLoggedUser();
         // ERPNext returns 'Guest' if not logged in
         if (response.success && response.message && response.message !== 'Guest') {
-          setUser({ username: response.message });
+          const username = response.message;
+          
+          let roleProfileName = 'Unknown';
+
+          // Restore role_profile_name from localStorage if available
+          const storedUserStr = localStorage.getItem('murni_user_session');
+          if (storedUserStr) {
+            try {
+              const storedUser = JSON.parse(storedUserStr);
+              if (storedUser && storedUser.username === username) {
+                roleProfileName = storedUser.roleProfileName || 'Unknown';
+              }
+            } catch (e) {
+              console.error('Failed to parse stored user session');
+            }
+          }
+
+          const roleProfile = normalizeRoleProfile(roleProfileName);
+          const capabilities = getCapabilities(roleProfile);
+
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[Role Audit]\n' + 
+                        `ERPNext Role Profile: ${roleProfileName}\n` +
+                        `Application Role: ${roleProfile}\n` +
+                        `Capabilities:\n`, capabilities);
+          }
+
+          setUser({ 
+            username,
+            roleProfile,
+            capabilities
+          });
           setIsAuthenticated(true);
         } else {
           setUser(null);
@@ -41,8 +73,29 @@ export const AuthProvider = ({ children }) => {
         return { success: false, error: response.error };
       }
 
-      // Assuming response contains user details. Adjust based on actual API.
-      const userData = { username: response.user || username }; 
+      const loggedInUser = response.user || username;
+      
+      const roleProfileName = response.role_profile_name || 'Unknown';
+      
+      const roleProfile = normalizeRoleProfile(roleProfileName);
+      const capabilities = getCapabilities(roleProfile);
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Role Audit]\n' + 
+                    `ERPNext Role Profile: ${roleProfileName}\n` +
+                    `Application Role: ${roleProfile}\n` +
+                    `Capabilities:\n`, capabilities);
+      }
+
+      const userData = { 
+        username: loggedInUser,
+        roleProfileName,
+        roleProfile,
+        capabilities
+      }; 
+      
+      localStorage.setItem('murni_user_session', JSON.stringify(userData));
+      
       setUser(userData);
       setIsAuthenticated(true);
       return { success: true };
@@ -57,6 +110,7 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error("Logout error", error);
     } finally {
+      localStorage.removeItem('murni_user_session');
       setUser(null);
       setIsAuthenticated(false);
     }
@@ -71,3 +125,8 @@ export const AuthProvider = ({ children }) => {
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext);
+
+export const useCapabilities = () => {
+  const { user } = useAuth();
+  return user?.capabilities || getCapabilities('Unknown');
+};

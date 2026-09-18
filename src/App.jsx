@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { OrderProvider, useOrders } from './context/OrderContext';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import CapabilityGuard from './components/CapabilityGuard';
 import AppShell from './components/AppShell';
 import Home from './pages/Home';
 import Picking from './pages/Picking';
@@ -10,6 +11,7 @@ import Pickup from './pages/Pickup/index';
 import Login from './pages/Login/index';
 import Success from './pages/Success';
 import Settings from './pages/Settings';
+import ReceivePicking from './pages/ReceivePicking';
 import History from './pages/History';
 import DeliveryNoteDetail from './pages/DeliveryNoteDetail';
 
@@ -38,7 +40,16 @@ const App = () => {
             {/* App Shell Routes */}
             <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
               <Route path="/" element={<Home />} />
-              <Route path="/pickup" element={<Pickup />} />
+              <Route path="/pickup" element={
+                <CapabilityGuard requiredCapability="canCustomerPickup">
+                  <Pickup />
+                </CapabilityGuard>
+              } />
+              <Route path="/receive-picking" element={
+                <CapabilityGuard requiredCapability="canReceivePicking">
+                  <ReceivePicking />
+                </CapabilityGuard>
+              } />
               <Route path="/history" element={<History />} />
               <Route path="/settings" element={<Settings />} />
             </Route>
@@ -51,7 +62,9 @@ const App = () => {
             } />
             <Route path="/picking" element={
               <ProtectedRoute>
-                <Picking />
+                <CapabilityGuard requiredCapability="canPicking">
+                  <Picking />
+                </CapabilityGuard>
               </ProtectedRoute>
             } />
             <Route path="/success" element={

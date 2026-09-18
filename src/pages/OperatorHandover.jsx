@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOrders } from '../context/OrderContext';
-import { ChevronLeft, QrCode, CheckCircle } from 'lucide-react';
+import { ChevronLeft, Barcode, CheckCircle } from 'lucide-react';
 
 const Pickup = () => {
   const { activeOrder, clearActiveOrder } = useOrders();
@@ -58,16 +58,16 @@ const Pickup = () => {
               border: '2px dashed var(--border-color)',
               marginBottom: '24px'
             }}>
-              <QrCode size={64} color="var(--text-muted)" />
+              <Barcode size={64} color="var(--text-muted)" />
             </div>
             
-            <h2 className="text-lg mb-4">Scan QR Pelanggan</h2>
-            <p className="text-secondary mb-4" style={{ marginBottom: '32px' }}>
-              Minta pelanggan untuk menunjukkan QR code pengambilan pesanan mereka.
+            <h2 className="text-lg mb-4">Scan Barcode Pelanggan</h2>
+            <p className="text-secondary mb-8">
+              Minta pelanggan untuk menunjukkan Barcode pengambilan pesanan mereka.
             </p>
             
             <button className="btn btn-secondary" onClick={handleSimulateScan}>
-              (Simulasi) Berhasil Scan QR
+              (Simulasi) Berhasil Scan Barcode
             </button>
           </>
         ) : (
@@ -75,7 +75,7 @@ const Pickup = () => {
             <div style={{ marginBottom: '24px' }}>
               <CheckCircle size={80} color="var(--success-color)" />
             </div>
-            <h2 className="text-lg mb-4">QR Valid</h2>
+            <h2 className="text-lg mb-4">Barcode Valid</h2>
             <p className="text-secondary mb-4" style={{ marginBottom: '32px' }}>
               Pesanan untuk {activeOrder.customerInfo?.name || 'Pelanggan'} dapat diserahkan.
             </p>

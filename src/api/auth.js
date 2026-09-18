@@ -37,7 +37,12 @@ export const login = async (usr, pwd) => {
       return { success: false, error: 'Login API merespons sukses tetapi session/cookie tidak dapat digunakan (CORS/Cookie policy blocker).' };
     }
 
-    return { success: true, data: response, user: sessionCheck.message };
+    return { 
+      success: true, 
+      data: response, 
+      user: sessionCheck.message,
+      role_profile_name: response.role_profile_name || response.message?.role_profile_name // Depending on exact nesting, usually it's at root in custom endpoint
+    };
   } catch (error) {
     let errorMessage = error.message;
     
@@ -67,4 +72,17 @@ export const logout = async () => {
 export const getLoggedUser = async () => {
   // Use real session check instead of local storage simulation
   return await checkSession();
+};
+
+/**
+ * Fetch full user profile from Frappe
+ * @param {string} username
+ */
+export const getUserProfile = async (username) => {
+  try {
+    const response = await apiClient.get(`/api/resource/User/${username}`);
+    return { success: true, data: response.data };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
 };

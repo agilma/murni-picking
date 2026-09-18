@@ -34,11 +34,10 @@ const playSuccessBeep = () => {
 };
 
 const Picking = () => {
-  const { activeOrder, updateQuantity, scanProduct, completeOrder, clearActiveOrder, loading, activeOrderError } = useOrders();
+  const { activeOrder, incrementPickedQty, completeOrder, clearActiveOrder, loading, activeOrderError } = useOrders();
   const navigate = useNavigate();
   const [barcodeInput, setBarcodeInput] = useState('');
   const [productSearch, setProductSearch] = useState('');
-  const [pickupLater, setPickupLater] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [scanFeedback, setScanFeedback] = useState(null);
   
@@ -60,25 +59,22 @@ const Picking = () => {
     }
   };
 
-  const processScan = (barcode) => {
+  const processScan = async (barcode) => {
     if (!activeOrder) return;
-    const item = activeOrder.items.find(i => i.itemCode === barcode);
-    if (item) {
-      if (item.pickedQty < item.orderedQty) {
-        playSuccessBeep();
-        setScanFeedback('✓ Barang berhasil dipindai');
-        setTimeout(() => setScanFeedback(null), 2000);
-        setIsScannerOpen(false); // Close modal on successful item match
-      } else {
-        setScanFeedback('Jumlah barang ini sudah sesuai.');
-        setTimeout(() => setScanFeedback(null), 2000);
-      }
+    
+    // Using incrementPickedQty which updates state inside OrderContext
+    const success = await incrementPickedQty(barcode);
+    
+    if (success) {
+      playSuccessBeep();
+      setScanFeedback('✓ Barang berhasil dipindai');
+      setTimeout(() => setScanFeedback(null), 2000);
+      setIsScannerOpen(false); // Close modal on successful item match
     } else {
-      setScanFeedback('Kode barang ini tidak ada di Delivery Note.');
+      // The toast is already shown by incrementPickedQty in context, 
+      // but we can set local feedback if needed.
       setTimeout(() => setScanFeedback(null), 2000);
     }
-    
-    scanProduct(barcode);
   };
 
   const handleBack = () => {
@@ -91,15 +87,15 @@ const Picking = () => {
     setIsSubmitting(true);
     setSubmitError(false);
     
-    const result = await completeOrder(pickupLater);
+    const result = await completeOrder();
     setIsSubmitting(false);
     
     if (result) {
       navigate('/success', { 
         state: { 
           orderId: activeOrder.deliveryNoteNo, 
-          type: pickupLater ? 'PICKUP_LATER' : 'PICKUP_NOW',
-          customPickUpCode: result.customPickUpCode
+          type: result.custom_event_pickup_option || 'UNKNOWN',
+          customPickUpCode: result.pickupCode
         } 
       });
     } else {
@@ -227,9 +223,12 @@ const Picking = () => {
     );
   }
 
-  const isFullyPicked = activeOrder.items.every(i => i.pickedQty === i.orderedQty);
-  const completedItemsCount = activeOrder.items.filter(i => i.pickedQty === i.orderedQty).length;
-  const progressPercent = activeOrder.items.length > 0 ? (completedItemsCount / activeOrder.items.length) * 100 : 0;
+  const isFullyPicked = activeOrder.items.every(i => i.isPicked);
+  
+  const totalRequired = activeOrder.items.reduce((sum, item) => sum + Number(item.qty || 0), 0);
+  const totalPicked = activeOrder.items.reduce((sum, item) => sum + Number(item.pickedQty || 0), 0);
+  
+  const progressPercent = totalRequired > 0 ? (totalPicked / totalRequired) * 100 : 0;
   
   const filteredItems = activeOrder.items.filter(item => 
     item.itemName.toLowerCase().includes(productSearch.toLowerCase()) || 
@@ -262,12 +261,18 @@ const Picking = () => {
 
       {/* PROGRESS SECTION */}
       <div style={{ padding: '16px', backgroundColor: 'var(--bg-elevated)', borderBottom: '1px solid var(--border-color)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>
-          <span>Picking Progress</span>
-          <span>{completedItemsCount} / {activeOrder.items.length} item</span>
-        </div>
-        <div style={{ width: '100%', height: '8px', backgroundColor: 'var(--border-color)', borderRadius: '4px', overflow: 'hidden', position: 'relative' }}>
-          <div style={{ width: `${progressPercent}%`, height: '100%', backgroundColor: 'var(--success-color)', transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)' }} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontWeight: '600', fontSize: '13px', color: 'var(--text-secondary)' }}>
+              Progres Picking
+            </div>
+            <div style={{ fontWeight: '700', fontSize: '13px', color: 'var(--accent-primary)' }}>
+              Total: {totalPicked} / {totalRequired} item
+            </div>
+          </div>
+          <div style={{ width: '100%', height: '8px', backgroundColor: 'var(--border-color)', borderRadius: '4px', overflow: 'hidden', position: 'relative' }}>
+            <div style={{ width: `${progressPercent}%`, height: '100%', backgroundColor: 'var(--success-color)', transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)' }} />
+          </div>
         </div>
         <div style={{ textAlign: 'right', fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px', fontWeight: '500' }}>
           {Math.round(progressPercent)}%
@@ -346,11 +351,11 @@ const Picking = () => {
       </div>
 
       <div className="flex-grow" style={{ overflowY: 'auto' }}>
-        {filteredItems.map(item => {
-          const isCompleted = item.pickedQty === item.orderedQty;
+        {filteredItems.map((item, idx) => {
+          const isCompleted = item.isPicked;
           
           return (
-            <div key={item.itemCode} style={{ 
+            <div key={`${item.itemCode}-${idx}`} style={{ 
               display: 'flex', 
               flexDirection: 'column', 
               gap: '12px',
@@ -380,70 +385,62 @@ const Picking = () => {
                     {item.itemName}
                   </div>
                   <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                    {item.itemCode}
+                    Barcode: {item.itemCode}
                   </div>
-                  <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                    {item.warehouse}
+                  <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                    Warehouse: {item.warehouse}
+                  </div>
+                  <div style={{ fontSize: '14px', fontWeight: '600', color: isCompleted ? 'var(--success-color)' : 'var(--text-primary)' }}>
+                    Picked: {item.pickedQty || 0} / {item.qty}
                   </div>
                 </div>
-              </div>
-              
-              <div style={{ display: 'flex', justifyContent: 'center' }}>
-                <div style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '16px',
-                  backgroundColor: 'var(--bg-secondary)',
-                  padding: '4px 8px',
-                  borderRadius: '24px',
-                  border: '1px solid var(--border-color)'
-                }}>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                  {isCompleted ? (
+                    <div style={{
+                      backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                      color: 'var(--success-color)',
+                      padding: '4px 8px',
+                      borderRadius: '12px',
+                      fontSize: '12px',
+                      fontWeight: '700',
+                      border: '1px solid rgba(34, 197, 94, 0.2)',
+                      marginBottom: '8px'
+                    }}>
+                      PICKED
+                    </div>
+                  ) : (
+                    <div style={{
+                      color: 'var(--text-secondary)',
+                      padding: '4px 8px',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      marginBottom: '8px'
+                    }}>
+                      Belum selesai
+                    </div>
+                  )}
+                  
                   <button 
-                    onClick={() => updateQuantity(item.itemCode, -1)}
-                    disabled={item.pickedQty === 0}
+                    onClick={() => incrementPickedQty(item.itemName || item.itemCode)}
+                    disabled={isCompleted}
                     style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '8px',
+                      backgroundColor: isCompleted ? 'var(--bg-secondary)' : 'var(--accent-primary)',
+                      color: isCompleted ? 'var(--text-muted)' : 'white',
+                      border: isCompleted ? '1px solid var(--border-color)' : 'none',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      width: '40px',
-                      height: '40px',
-                      borderRadius: '50%',
-                      border: 'none',
-                      backgroundColor: item.pickedQty === 0 ? 'transparent' : 'var(--bg-elevated)',
-                      color: item.pickedQty === 0 ? 'var(--text-muted)' : 'var(--text-primary)',
-                      cursor: item.pickedQty === 0 ? 'not-allowed' : 'pointer'
+                      cursor: isCompleted ? 'not-allowed' : 'pointer',
+                      fontSize: '20px',
+                      fontWeight: 'bold',
+                      boxShadow: isCompleted ? 'none' : '0 2px 4px rgba(59, 130, 246, 0.3)'
                     }}
                   >
-                    <Minus size={20} />
-                  </button>
-                  
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', minWidth: '48px', justifyContent: 'center' }}>
-                    <span style={{ fontSize: '18px', fontWeight: '700', color: isCompleted ? 'var(--success-color)' : 'var(--text-primary)' }}>
-                      {item.pickedQty}
-                    </span>
-                    <span style={{ fontSize: '14px', color: 'var(--text-muted)' }}>/</span>
-                    <span style={{ fontSize: '14px', color: 'var(--text-muted)', fontWeight: '500' }}>
-                      {item.orderedQty}
-                    </span>
-                  </div>
-                  
-                  <button 
-                    onClick={() => updateQuantity(item.itemCode, 1)}
-                    disabled={item.pickedQty >= item.orderedQty}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      width: '40px',
-                      height: '40px',
-                      borderRadius: '50%',
-                      border: 'none',
-                      backgroundColor: item.pickedQty >= item.orderedQty ? 'transparent' : 'var(--bg-elevated)',
-                      color: item.pickedQty >= item.orderedQty ? 'var(--text-muted)' : 'var(--text-primary)',
-                      cursor: item.pickedQty >= item.orderedQty ? 'not-allowed' : 'pointer'
-                    }}
-                  >
-                    <Plus size={20} />
+                    +
                   </button>
                 </div>
               </div>
@@ -475,31 +472,7 @@ const Picking = () => {
           </div>
         )}
 
-        <div style={{ padding: '0 4px' }}>
-          <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px', color: 'var(--text-primary)' }}>Cara Pengambilan</div>
-          <div className="selectable-card-container">
-            <div 
-              className={`selectable-card ${!pickupLater ? 'active' : ''}`}
-              onClick={() => setPickupLater(false)}
-            >
-              <div className="selectable-card-title">
-                {!pickupLater && <Check size={16} />}
-                Ambil Sekarang
-              </div>
-              <div className="selectable-card-desc">Barang diambil sekarang</div>
-            </div>
-            <div 
-              className={`selectable-card ${pickupLater ? 'active' : ''}`}
-              onClick={() => setPickupLater(true)}
-            >
-              <div className="selectable-card-title">
-                {pickupLater && <Check size={16} />}
-                Ambil Nanti
-              </div>
-              <div className="selectable-card-desc">Pelanggan mengambil nanti</div>
-            </div>
-          </div>
-        </div>
+
 
         <button 
           className={`btn ${isFullyPicked ? 'btn-primary' : 'btn-secondary'}`} 
@@ -529,7 +502,7 @@ const Picking = () => {
           ) : !isFullyPicked ? (
             'Selesaikan jumlah barang terlebih dahulu'
           ) : (
-            'Submit Delivery Note'
+            'Selesai Picking'
           )}
         </button>
       </div>

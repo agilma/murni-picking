@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOrders } from '../context/OrderContext';
-import { Search, Package, MapPin, QrCode, Calendar, Truck, ClipboardList, ChevronLeft, RefreshCw, Clock } from 'lucide-react';
+import { useAuth, useCapabilities } from '../context/AuthContext';
+import { Search, Package, MapPin, Barcode, Calendar, Truck, ClipboardList, ChevronLeft, RefreshCw, Clock, UserCheck, Inbox } from 'lucide-react';
+import { resolvePickupFlow } from '../utils/pickupFlow';
 
 const Home = () => {
   const [search, setSearch] = useState('');
@@ -14,8 +16,22 @@ const Home = () => {
   const [isPulling, setIsPulling] = useState(false);
   const [pullDistance, setPullDistance] = useState(0);
 
-  const { deliveryNotes, selectDeliveryNote, loading, dnError, fetchDeliveryNotes, lastPickedOrder, setLastPickedOrder } = useOrders();
+  const { 
+    deliveryNotes, 
+    selectDeliveryNote, 
+    loadDeliveryNoteDetail, 
+    loading, 
+    dnError, 
+    fetchDeliveryNotes, 
+    lastPickedOrder, 
+    setLastPickedOrder,
+    activePickingId,
+    resumePicking
+  } = useOrders();
+  const { user } = useAuth();
+  const capabilities = useCapabilities();
   const navigate = useNavigate();
+  const [loadingDetail, setLoadingDetail] = useState(false);
 
   const handleRefresh = async () => {
     if (isRefreshing) return;
@@ -24,15 +40,40 @@ const Home = () => {
     setIsRefreshing(false);
   };
 
-  const handleSelectDN = (dnObject) => {
+  const handleSelectDN = async (dnObject) => {
+    // Show skeleton or old data while loading
     setSelectedDN(dnObject);
+    setLoadingDetail(true);
+    const detail = await loadDeliveryNoteDetail(dnObject.deliveryNoteNo);
+    if (detail) {
+      setSelectedDN({ ...dnObject, ...detail });
+    }
+    setLoadingDetail(false);
   };
 
-  const filteredDNs = deliveryNotes.filter(dn => 
+  const handleResumePicking = async () => {
+    if (!activePickingId) return;
+    const success = await resumePicking(activePickingId);
+    if (success) {
+      navigate('/picking');
+    }
+  };
+
+  const availableDNs = deliveryNotes.filter(dn => 
+    !dn.pickedBy && !dn.isPicked && dn.docstatus === 0
+  );
+  
+  const activeDNs = deliveryNotes.filter(dn => 
+    dn.pickedBy === (user?.email || user?.name) && !dn.isPicked && dn.docstatus === 0
+  );
+
+  const filterFn = dn => 
     dn.deliveryNoteNo.toLowerCase().includes(search.toLowerCase()) ||
     (dn.salesOrderNo && dn.salesOrderNo.toLowerCase().includes(search.toLowerCase())) ||
-    (dn.customer && dn.customer.toLowerCase().includes(search.toLowerCase()))
-  );
+    (dn.customer && dn.customer.toLowerCase().includes(search.toLowerCase()));
+
+  const filteredAvailableDNs = availableDNs.filter(filterFn);
+  const filteredActiveDNs = activeDNs.filter(filterFn);
 
   // Touch handlers for pull to refresh
   const handleTouchStart = (e) => {
@@ -88,6 +129,8 @@ const Home = () => {
           </div>
         </div>
       )}
+
+
       
       <div className="header" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -131,27 +174,92 @@ const Home = () => {
         @keyframes spin { 100% { transform: rotate(360deg); } }
       `}</style>
 
-      <div style={{ padding: '16px 16px 0 16px' }}>
-        <button 
-          className="btn btn-primary" 
-          onClick={() => navigate('/pickup')}
-          style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
-        >
-          <QrCode size={20} />
-          Scan QR Pickup Pelanggan
-        </button>
-      </div>
+      {capabilities.canCustomerPickup && (
+        <div style={{ padding: '16px 16px 0 16px' }}>
+          <button 
+            className="btn btn-primary" 
+            onClick={() => navigate('/pickup')}
+            style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
+          >
+            <Barcode size={20} />
+            Scan Barcode Pickup Pelanggan
+          </button>
+        </div>
+      )}
 
-      <div style={{ padding: '12px 16px 0 16px' }}>
-        <button 
-          className="btn btn-secondary" 
-          onClick={() => navigate('/history')}
-          style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
-        >
-          <Clock size={20} />
-          Riwayat Picking
-        </button>
-      </div>
+      {(user?.roleProfile === 'Picking' || user?.roleProfile === 'Pickup') && (
+        <div style={{ padding: '16px 16px 0 16px' }}>
+          <button 
+            className="btn btn-secondary" 
+            onClick={() => navigate('/receive-picking')}
+            style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
+          >
+            <Inbox size={20} />
+            Terima Barang dari Picker
+          </button>
+        </div>
+      )}
+
+      {capabilities.canPicking && (
+        <>
+          <div style={{ padding: '12px 16px 0 16px' }}>
+            <button 
+              className="btn btn-secondary" 
+              onClick={() => navigate('/history')}
+              style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
+            >
+              <Clock size={20} />
+              Riwayat Picking
+            </button>
+          </div>
+
+          {/* Resume Picking Banner */}
+          {activePickingId && (
+            <div style={{
+              margin: '16px 16px 0',
+              padding: '16px',
+              backgroundColor: 'var(--bg-elevated)',
+              borderRadius: '12px',
+              border: '1px solid var(--accent-primary)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.1), 0 2px 4px -1px rgba(59, 130, 246, 0.06)'
+            }}>
+              <div>
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500', marginBottom: '4px' }}>
+                  Picking Aktif
+                </div>
+                <div style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>
+                  {activePickingId}
+                </div>
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                  Masih ada proses picking yang belum selesai.
+                </div>
+              </div>
+              <button 
+                onClick={handleResumePicking}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  backgroundColor: 'var(--accent-primary)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontWeight: '600',
+                  fontSize: '14px',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  cursor: 'pointer'
+                }}
+              >
+                Lanjut Picking
+              </button>
+            </div>
+          )}
+        </>
+      )}
 
       {lastPickedOrder && (
         <div style={{ padding: '16px 16px 0 16px' }}>
@@ -213,19 +321,32 @@ const Home = () => {
               <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>{lastPickedOrder.customer || '-'}</div>
             </div>
 
-            {lastPickedOrder.customPickupLater === 1 && (
-              <div style={{ marginTop: '8px', border: '2px solid var(--border-color)', padding: '16px', borderRadius: '8px', textAlign: 'center', backgroundColor: 'var(--bg-secondary)' }}>
-                <p className="text-secondary" style={{ fontSize: '14px', marginBottom: '8px' }}>PICKUP CODE</p>
-                {lastPickedOrder.customPickUpCode ? (
-                  <>
-                    <h1 style={{ fontSize: '32px', margin: '0 0 12px 0', color: 'var(--text-primary)', letterSpacing: '2px' }}>{lastPickedOrder.customPickUpCode}</h1>
-                    <p className="text-secondary" style={{ fontSize: '14px', margin: 0 }}>Tulis kode ini pada paper bag.</p>
-                  </>
-                ) : (
-                  <p className="text-secondary" style={{ fontSize: '14px', margin: 0, color: 'var(--error-color)' }}>Pickup code belum tersedia.</p>
-                )}
-              </div>
-            )}
+            {(() => {
+              const flow = resolvePickupFlow(lastPickedOrder);
+              if (flow === 'UNKNOWN') {
+                return (
+                  <div style={{ marginTop: '8px', border: '2px solid var(--error-color)', padding: '16px', borderRadius: '8px', textAlign: 'center', backgroundColor: 'rgba(239, 68, 68, 0.1)' }}>
+                    <p style={{ color: 'var(--error-color)', fontSize: '14px', margin: 0, fontWeight: '600' }}>Metode Pickup Tidak Dikenali</p>
+                  </div>
+                );
+              }
+              if (flow === 'BOOTH') {
+                return (
+                  <div style={{ marginTop: '8px', border: '2px solid var(--border-color)', padding: '16px', borderRadius: '8px', textAlign: 'center', backgroundColor: 'var(--bg-secondary)' }}>
+                    <p className="text-secondary" style={{ fontSize: '14px', marginBottom: '8px' }}>PICKUP CODE</p>
+                    {lastPickedOrder.pickupCode ? (
+                      <>
+                        <h1 style={{ fontSize: '32px', margin: '0 0 12px 0', color: 'var(--text-primary)', letterSpacing: '2px' }}>{lastPickedOrder.pickupCode}</h1>
+                        <p className="text-secondary" style={{ fontSize: '14px', margin: 0 }}>Tulis kode ini pada paper bag.</p>
+                      </>
+                    ) : (
+                      <p className="text-secondary" style={{ fontSize: '14px', margin: 0, color: 'var(--error-color)' }}>Pickup code belum tersedia.</p>
+                    )}
+                  </div>
+                );
+              }
+              return null;
+            })()}
             
             <button 
               className="btn btn-secondary" 
@@ -238,15 +359,32 @@ const Home = () => {
         </div>
       )}
 
-      <div style={{ display: 'flex', padding: '16px 16px 0 16px' }}>
+      <div style={{ display: 'flex', padding: '16px 16px 0 16px', gap: '8px' }}>
         <div 
           style={{ 
             flex: 1, 
             padding: '12px', 
             borderRadius: '8px 8px 0 0', 
-            borderBottom: '2px solid var(--accent-primary)',
-            background: 'var(--bg-elevated)',
-            color: 'var(--text-primary)',
+            borderBottom: filteredActiveDNs.length > 0 ? '2px solid var(--accent-primary)' : '2px solid transparent',
+            background: filteredActiveDNs.length > 0 ? 'var(--bg-elevated)' : 'transparent',
+            color: filteredActiveDNs.length > 0 ? 'var(--text-primary)' : 'var(--text-secondary)',
+            fontWeight: 'bold',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+          <UserCheck size={18} />
+          Active · {filteredActiveDNs.length}
+        </div>
+        <div 
+          style={{ 
+            flex: 1, 
+            padding: '12px', 
+            borderRadius: '8px 8px 0 0', 
+            borderBottom: filteredActiveDNs.length === 0 ? '2px solid var(--accent-primary)' : '2px solid transparent',
+            background: filteredActiveDNs.length === 0 ? 'var(--bg-elevated)' : 'transparent',
+            color: filteredActiveDNs.length === 0 ? 'var(--text-primary)' : 'var(--text-secondary)',
             fontWeight: 'bold',
             display: 'flex',
             justifyContent: 'center',
@@ -254,7 +392,7 @@ const Home = () => {
             gap: '8px'
           }}>
           <Truck size={18} />
-          Siap Picking · {filteredDNs.length}
+          Available · {filteredAvailableDNs.length}
         </div>
       </div>
 
@@ -318,80 +456,85 @@ const Home = () => {
               <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
                 <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '8px' }}>Barang</div>
                 
-                <div style={{ 
-                  backgroundColor: 'rgba(0, 0, 0, 0.02)',
-                  borderRadius: '8px',
-                  border: '1px solid var(--border-color)',
-                  overflow: 'hidden'
-                }}>
-                  <div style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    padding: '12px', 
-                    borderBottom: '1px solid var(--border-color)',
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    color: 'var(--text-secondary)',
-                    backgroundColor: 'var(--bg-secondary)'
-                  }}>
-                    <div>NAMA BARANG</div>
-                    <div>QTY</div>
+                {loadingDetail ? (
+                  <div style={{ padding: '20px', textAlign: 'center' }}>
+                    <div style={{ width: '24px', height: '24px', margin: '0 auto', borderRadius: '50%', border: '2px solid var(--border-color)', borderTopColor: 'var(--accent-primary)', animation: 'spin 1s linear infinite' }} />
                   </div>
-                  
-                  {selectedDN.items && selectedDN.items.length > 0 ? (
-                    selectedDN.items.map((item, idx, arr) => (
-                      <div key={idx} style={{ 
-                        display: 'flex', 
-                        justifyContent: 'space-between', 
-                        alignItems: 'flex-start',
-                        padding: '12px', 
-                        borderBottom: idx < arr.length - 1 ? '1px solid var(--border-color)' : 'none',
-                        fontSize: '14px',
-                        gap: '12px'
-                      }}>
-                        <div style={{ 
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '2px',
-                          minWidth: 0
+                ) : (
+                  <div style={{ 
+                    backgroundColor: 'rgba(0, 0, 0, 0.02)',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-color)',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      padding: '12px', 
+                      borderBottom: '1px solid var(--border-color)',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      color: 'var(--text-secondary)',
+                      backgroundColor: 'var(--bg-secondary)'
+                    }}>
+                      <div>NAMA BARANG</div>
+                      <div>QTY</div>
+                    </div>
+                    
+                    {selectedDN.items && selectedDN.items.length > 0 ? (
+                      selectedDN.items.map((item, idx, arr) => (
+                        <div key={idx} style={{ 
+                          display: 'flex', 
+                          justifyContent: 'space-between', 
+                          alignItems: 'flex-start',
+                          padding: '12px', 
+                          borderBottom: idx < arr.length - 1 ? '1px solid var(--border-color)' : 'none',
+                          fontSize: '14px',
+                          gap: '12px'
                         }}>
                           <div style={{ 
-                            fontWeight: '500', 
-                            color: 'var(--text-primary)', 
-                            wordBreak: 'break-word', 
-                            overflowWrap: 'anywhere',
-                            lineHeight: '1.4'
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '2px',
+                            minWidth: 0
                           }}>
-                            {item.itemName}
+                            <div style={{ 
+                              fontWeight: '500', 
+                              color: 'var(--text-primary)', 
+                              wordBreak: 'break-word', 
+                              overflowWrap: 'anywhere',
+                            }}>
+                              {item.itemName || item.itemCode}
+                            </div>
+                            {item.itemName && item.itemName !== item.itemCode && (
+                              <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                {item.itemCode}
+                              </div>
+                            )}
                           </div>
-                          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{item.itemCode}</div>
+                          <div style={{ fontWeight: '600', color: 'var(--text-primary)', flexShrink: 0 }}>
+                            {item.qty}
+                          </div>
                         </div>
-                        <div style={{ 
-                          fontWeight: '700', 
-                          color: 'var(--text-primary)',
-                          flexShrink: 0,
-                          backgroundColor: 'var(--bg-primary)',
-                          padding: '2px 8px',
-                          borderRadius: '12px',
-                          border: '1px solid var(--border-color)'
-                        }}>{item.qty}</div>
+                      ))
+                    ) : (
+                      <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '14px' }}>
+                        Tidak ada data barang
                       </div>
-                    ))
-                  ) : (
-                    <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '14px' }}>
-                      Tidak ada data barang
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
             <button 
               className="btn btn-primary" 
               style={{ padding: '16px', fontSize: '16px', marginTop: '8px' }}
-              onClick={() => {
-                selectDeliveryNote(selectedDN);
-                navigate('/picking');
+              onClick={async () => {
+                const success = await selectDeliveryNote(selectedDN);
+                if (success) {
+                  navigate('/picking');
+                }
               }}
             >
               Mulai Picking
@@ -414,57 +557,110 @@ const Home = () => {
                   Coba Lagi
                 </button>
               </div>
-            ) : filteredDNs.length > 0 ? (
-              filteredDNs.map((dn) => (
-                <div 
-                  key={dn.deliveryNoteNo} 
-                  className="card" 
-                  style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '12px' }}
-                  onClick={() => handleSelectDN(dn)}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <span className="text-lg" style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{dn.deliveryNoteNo}</span>
-                      {dn.salesOrderNo && (
-                        <span style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <ClipboardList size={14} />
-                          {dn.salesOrderNo}
-                        </span>
-                      )}
+            ) : (filteredActiveDNs.length > 0 || filteredAvailableDNs.length > 0) ? (
+              <>
+                {filteredActiveDNs.map((dn) => (
+                  <div 
+                    key={dn.deliveryNoteNo} 
+                    className="card" 
+                    style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '12px', borderLeft: '4px solid var(--accent-primary)' }}
+                    onClick={() => handleSelectDN(dn)}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span className="text-lg" style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{dn.deliveryNoteNo}</span>
+                        {dn.salesOrderNo && (
+                          <span style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <ClipboardList size={14} />
+                            {dn.salesOrderNo}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ 
+                        backgroundColor: 'var(--accent-primary)', 
+                        color: 'white',
+                        padding: '4px 10px', 
+                        borderRadius: '16px', 
+                        fontSize: '12px', 
+                        fontWeight: '600',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}>
+                        <Package size={14} />
+                        {dn.items?.reduce((total, item) => total + Number(item.qty || 0), 0) || 0}
+                      </div>
                     </div>
-                    <div style={{ 
-                      backgroundColor: 'var(--accent-primary)', 
-                      color: 'white',
-                      padding: '4px 10px', 
-                      borderRadius: '16px', 
-                      fontSize: '12px', 
-                      fontWeight: '600',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px'
-                    }}>
-                      <Package size={14} />
-                      {dn.items?.length || 0}
+                    
+                    {dn.customer && (
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', fontSize: '14px', color: 'var(--text-primary)', marginTop: '4px' }}>
+                        <MapPin size={16} color="var(--text-muted)" style={{ flexShrink: 0, marginTop: '2px' }} />
+                        <span style={{ fontWeight: '500', wordBreak: 'break-word' }}>{dn.customer}</span>
+                      </div>
+                    )}
+                    
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+                      <div style={{ fontSize: '12px', color: 'var(--accent-primary)', fontWeight: '600' }}>
+                        Sedang Anda Pick
+                      </div>
+                      <div style={{ color: 'var(--accent-primary)', fontSize: '13px', fontWeight: '600', display: 'flex', alignItems: 'center' }}>
+                        Lanjutkan
+                      </div>
                     </div>
                   </div>
-                  
-                  {dn.customer && (
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', fontSize: '14px', color: 'var(--text-primary)', marginTop: '4px' }}>
-                      <MapPin size={16} color="var(--text-muted)" style={{ flexShrink: 0, marginTop: '2px' }} />
-                      <span style={{ fontWeight: '500', wordBreak: 'break-word' }}>{dn.customer}</span>
+                ))}
+                
+                {filteredAvailableDNs.map((dn) => (
+                  <div 
+                    key={dn.deliveryNoteNo} 
+                    className="card" 
+                    style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '12px' }}
+                    onClick={() => handleSelectDN(dn)}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span className="text-lg" style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{dn.deliveryNoteNo}</span>
+                        {dn.salesOrderNo && (
+                          <span style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <ClipboardList size={14} />
+                            {dn.salesOrderNo}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ 
+                        backgroundColor: 'var(--bg-secondary)', 
+                        color: 'var(--text-primary)',
+                        padding: '4px 10px', 
+                        borderRadius: '16px', 
+                        fontSize: '12px', 
+                        fontWeight: '600',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}>
+                        <Package size={14} />
+                        {dn.items?.reduce((total, item) => total + Number(item.qty || 0), 0) || 0}
+                      </div>
                     </div>
-                  )}
-                  
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                      {dn.postingDate ? new Date(dn.postingDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}
-                    </div>
-                    <div style={{ color: 'var(--accent-primary)', fontSize: '13px', fontWeight: '600', display: 'flex', alignItems: 'center' }}>
-                      Detail
+                    
+                    {dn.customer && (
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', fontSize: '14px', color: 'var(--text-primary)', marginTop: '4px' }}>
+                        <MapPin size={16} color="var(--text-muted)" style={{ flexShrink: 0, marginTop: '2px' }} />
+                        <span style={{ fontWeight: '500', wordBreak: 'break-word' }}>{dn.customer}</span>
+                      </div>
+                    )}
+                    
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                        {dn.postingDate ? new Date(dn.postingDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}
+                      </div>
+                      <div style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: '600', display: 'flex', alignItems: 'center' }}>
+                        Detail
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
+                ))}
+              </>
             ) : (
               <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '40px' }}>
                 <Package size={48} style={{ margin: '0 auto 16px', opacity: 0.5 }} />
@@ -475,6 +671,12 @@ const Home = () => {
           </div>
         )}
       </div>
+
+      {!capabilities.canPicking && (
+        <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+          <p>Anda login sebagai role Pickup. Silakan gunakan menu di atas.</p>
+        </div>
+      )}
     </div>
   );
 };

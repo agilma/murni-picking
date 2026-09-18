@@ -62,7 +62,7 @@ const PickupScanner = ({ onScanSuccess, onClose, onError }) => {
         }}
       ></div>
       <p className="text-secondary mb-4" style={{ textAlign: 'center', marginBottom: '24px' }}>
-        Arahkan kamera ke QR Code pickup
+        Arahkan kamera ke Barcode pickup
       </p>
       <button className="btn btn-secondary" onClick={onClose} style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
         <X size={20} /> Tutup Scanner
