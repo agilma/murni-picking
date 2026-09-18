@@ -54,7 +54,7 @@ const CustomerPickup = () => {
 
   const executeConfirm = async () => {
     setIsConfirming(true);
-    const response = await confirmPickup(pickupOrder.pickupCode);
+    const response = await confirmPickup(pickupOrder.salesInvoiceName);
     if (response.success) {
       navigate('/success', { state: { orderId: pickupOrder.orderId, type: 'DINE_IN' } });
     } else {
@@ -183,6 +183,20 @@ const CustomerPickup = () => {
             <div>
               <h2 className="text-lg mb-2">Barcode Tidak Valid</h2>
               <p className="text-secondary">Barcode ini tidak dapat digunakan<br/>untuk pickup.</p>
+            </div>
+            <button className="btn btn-primary" onClick={() => setPickupState('scanning')} style={{ width: '100%', maxWidth: '320px' }}>
+              Scan Lagi
+            </button>
+          </div>
+        )}
+
+        {/* NOT READY STATE */}
+        {pickupState === 'not-ready' && (
+          <div style={{ padding: '24px', flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', gap: '24px' }}>
+            <AlertCircle size={64} color="var(--warning-color)" />
+            <div>
+              <h2 className="text-lg mb-2">Pesanan Belum Siap</h2>
+              <p className="text-secondary">Pesanan belum siap diambil.<br/>Silakan tunggu proses penerimaan selesai.</p>
             </div>
             <button className="btn btn-primary" onClick={() => setPickupState('scanning')} style={{ width: '100%', maxWidth: '320px' }}>
               Scan Lagi

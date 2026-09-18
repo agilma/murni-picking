@@ -167,3 +167,42 @@ export const findDeliveryNotesBySalesOrder = async (salesOrderName) => {
   const list = response?.message || [];
   return Array.isArray(list) ? list : [];
 };
+
+/**
+ * Find Submitted Delivery Notes by Sales Order using Frappe Standard API
+ * @param {string} salesOrderName 
+ */
+export const findSubmittedDeliveryNotesBySalesOrder = async (salesOrderName) => {
+  if (!salesOrderName) return [];
+  
+  try {
+    // 1. Cari Delivery Note Item yang memiliki against_sales_order = salesOrderName
+    const dnItemsEndpoint = '/api/resource/Delivery Note Item';
+    const dnItemsResponse = await apiClient.get(dnItemsEndpoint, {
+      filters: JSON.stringify([['against_sales_order', '=', salesOrderName]]),
+      fields: JSON.stringify(['parent']),
+      limit_page_length: 100
+    });
+    
+    const items = dnItemsResponse?.data || [];
+    if (items.length === 0) return [];
+    
+    // Extrak nama Delivery Note (parent) yang unik
+    const dnNames = [...new Set(items.map(item => item.parent))];
+    
+    // 2. Fetch parent Delivery Note untuk mengecek docstatus dan custom_event_is_picked
+    const dnEndpoint = '/api/resource/Delivery Note';
+    const dnResponse = await apiClient.get(dnEndpoint, {
+      filters: JSON.stringify([
+        ['name', 'in', dnNames]
+      ]),
+      fields: JSON.stringify(['name', 'docstatus', 'custom_event_is_picked', 'custom_pick_up_code', 'customer', 'customer_name', 'total_qty', 'grand_total', 'custom_event_pickup_option']),
+      limit_page_length: 100
+    });
+    
+    return dnResponse?.data || [];
+  } catch (error) {
+    console.error("Error finding submitted delivery notes:", error);
+    return [];
+  }
+};

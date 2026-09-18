@@ -34,7 +34,7 @@ const playSuccessBeep = () => {
 };
 
 const Picking = () => {
-  const { activeOrder, incrementPickedQty, completeOrder, clearActiveOrder, loading, activeOrderError } = useOrders();
+  const { activeOrder, incrementPickedQty, decrementPickedQty, setPickedQty, completeOrder, clearActiveOrder, loading, activeOrderError } = useOrders();
   const navigate = useNavigate();
   const [barcodeInput, setBarcodeInput] = useState('');
   const [productSearch, setProductSearch] = useState('');
@@ -255,6 +255,11 @@ const Picking = () => {
             <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
               {activeOrder.deliveryNoteNo}
             </div>
+            { (activeOrder.against_sales_order || activeOrder.salesOrderNo) && (
+              <div style={{ fontSize: '15px', color: 'var(--text-primary)', marginTop: '4px' }}>
+                Sales Order: <span style={{ fontWeight: '700', color: 'var(--accent-primary)' }}>{activeOrder.against_sales_order || activeOrder.salesOrderNo}</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -421,27 +426,66 @@ const Picking = () => {
                     </div>
                   )}
                   
-                  <button 
-                    onClick={() => incrementPickedQty(item.itemName || item.itemCode)}
-                    disabled={isCompleted}
-                    style={{
-                      width: '40px',
-                      height: '40px',
-                      borderRadius: '8px',
-                      backgroundColor: isCompleted ? 'var(--bg-secondary)' : 'var(--accent-primary)',
-                      color: isCompleted ? 'var(--text-muted)' : 'white',
-                      border: isCompleted ? '1px solid var(--border-color)' : 'none',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: isCompleted ? 'not-allowed' : 'pointer',
-                      fontSize: '20px',
-                      fontWeight: 'bold',
-                      boxShadow: isCompleted ? 'none' : '0 2px 4px rgba(59, 130, 246, 0.3)'
-                    }}
-                  >
-                    +
-                  </button>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <button 
+                      onClick={() => decrementPickedQty(item.barcode || item.itemCode)}
+                      disabled={!item.pickedQty || item.pickedQty <= 0}
+                      style={{
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '8px',
+                        backgroundColor: (!item.pickedQty || item.pickedQty <= 0) ? 'var(--bg-secondary)' : 'var(--error-color)',
+                        color: (!item.pickedQty || item.pickedQty <= 0) ? 'var(--text-muted)' : 'white',
+                        border: (!item.pickedQty || item.pickedQty <= 0) ? '1px solid var(--border-color)' : 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: (!item.pickedQty || item.pickedQty <= 0) ? 'not-allowed' : 'pointer',
+                        fontSize: '20px',
+                        fontWeight: 'bold',
+                        boxShadow: (!item.pickedQty || item.pickedQty <= 0) ? 'none' : '0 2px 4px rgba(239, 68, 68, 0.3)'
+                      }}
+                    >
+                      -
+                    </button>
+                    
+                    <input
+                      type="number"
+                      value={item.pickedQty || 0}
+                      onChange={(e) => setPickedQty(item.barcode || item.itemCode, e.target.value)}
+                      style={{
+                        width: '60px',
+                        height: '40px',
+                        textAlign: 'center',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border-color)',
+                        fontSize: '16px',
+                        fontWeight: '600'
+                      }}
+                    />
+
+                    <button 
+                      onClick={() => incrementPickedQty(item.barcode || item.itemCode)}
+                      disabled={isCompleted}
+                      style={{
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '8px',
+                        backgroundColor: isCompleted ? 'var(--bg-secondary)' : 'var(--accent-primary)',
+                        color: isCompleted ? 'var(--text-muted)' : 'white',
+                        border: isCompleted ? '1px solid var(--border-color)' : 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: isCompleted ? 'not-allowed' : 'pointer',
+                        fontSize: '20px',
+                        fontWeight: 'bold',
+                        boxShadow: isCompleted ? 'none' : '0 2px 4px rgba(59, 130, 246, 0.3)'
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

@@ -4,7 +4,7 @@ import { ChevronLeft, QrCode, Search, CheckCircle } from 'lucide-react';
 import { useOrders } from '../context/OrderContext';
 import { getDeliveryNoteWithItems } from '../api/picking';
 import { submitDeliveryNote, submitFrappeDeliveryNote, findDeliveryNotesBySalesOrder } from '../api/deliveryNote';
-import { getSalesOrderByPickupCode } from '../api/salesOrder';
+import { getSalesOrderByName } from '../api/salesOrder';
 import { resolvePickupFlow, canReceivePickingForFlow } from '../utils/pickupFlow';
 import { useAuth } from '../context/AuthContext';
 
@@ -63,7 +63,7 @@ const ReceivePicking = () => {
       let foundUnpicked = false;
       let foundNotDraft = false;
       
-      const so = await getSalesOrderByPickupCode(searchVal);
+      const so = await getSalesOrderByName(searchVal);
       
       if (so) {
         soName = so.name;
@@ -131,7 +131,7 @@ const ReceivePicking = () => {
         }
       } else {
         if (soName) {
-            setError('Delivery Note untuk pickup code ini belum ditemukan.');
+            setError('Delivery Note untuk nomor sales order ini belum ditemukan.');
         } else {
             setError('Delivery Note tidak ditemukan.');
         }
@@ -185,14 +185,7 @@ const ReceivePicking = () => {
       const isBatch = isBatchMode;
       const baseMsg = isBatch ? 'Berhasil men-submit seluruh Delivery Note secara Batch!' : 'Berhasil menerima barang dan mensubmit Delivery Note!';
       
-      let finalToastHtml = baseMsg;
-      if (successMessages.length > 0) {
-         // Clean up HTML tags like <b> from messages for simple toast or keep them if toast supports HTML.
-         // Usually simple string is safer. But we can just append it.
-         finalToastHtml = `${baseMsg}\n\nInfo:\n${successMessages.join('\n').replace(/<[^>]*>?/gm, '')}`;
-      }
-      
-      alert(finalToastHtml);
+      alert(baseMsg);
       navigate('/');
     } catch (err) {
       console.error(err);
@@ -228,7 +221,7 @@ const ReceivePicking = () => {
           <input
             type="text"
             className="search-input"
-            placeholder="Masukkan ID / Pickup Code..."
+            placeholder="Masukkan Nomor Sales Order..."
             style={{ padding: '14px 14px 14px 48px', width: '100%', fontSize: '16px' }}
             value={pickupCode}
             onChange={(e) => setPickupCode(e.target.value)}
@@ -297,8 +290,8 @@ const ReceivePicking = () => {
                       <span style={{ fontWeight: '600' }}>{soNumber}</span>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>Pickup Code</span>
-                      <span style={{ fontWeight: '600' }}>{pickupCodeStr}</span>
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>Sales Order</span>
+                      <span style={{ fontWeight: '600' }}>{dn.against_sales_order || '-'}</span>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       <span style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>Total Item</span>

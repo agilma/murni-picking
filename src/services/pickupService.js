@@ -1,6 +1,9 @@
 import { apiClient } from '../api/client';
 import { getSalesInvoicesByPickupCode, updateSalesInvoicePickedUp } from '../api/salesInvoice';
 import { isFrappeChecked } from '../utils/frappeUtils';
+import { getSalesOrderByPickupCode } from '../api/salesOrder';
+import { findDeliveryNotesBySalesOrder } from '../api/deliveryNote';
+import { getDeliveryNoteWithItems } from '../api/picking';
 
 export const parsePickupQr = (rawCode) => {
   if (!rawCode || typeof rawCode !== 'string') return null;
@@ -27,75 +30,75 @@ export const parsePickupQr = (rawCode) => {
 };
 
 export const validatePickupQr = async (code) => {
-  const pickupCode = parsePickupQr(code);
-  if (!pickupCode) {
+  const searchVal = parsePickupQr(code);
+  if (!searchVal) {
     return { status: 'invalid' };
   }
 
   try {
-    // Look up Delivery Note by pickup code
-    const endpoint = '/api/resource/Delivery Note';
-    const filters = [
-      ["custom_pick_up_code", "=", pickupCode]
-    ];
-    const fields = ["name", "customer", "customer_name", "total_qty", "grand_total", "docstatus", "custom_event_is_picked", "custom_pick_up_code", "custom_event_pickup_option"];
+    let pickupCodeToSearch = searchVal;
     
-    const response = await apiClient.get(endpoint, {
-      filters: JSON.stringify(filters),
-      fields: JSON.stringify(fields)
-    });
+    // 1. Dapatkan Sales Order dari Pickup Code
+    const so = await getSalesOrderByPickupCode(searchVal);
     
-    if (!response?.data || response.data.length === 0) {
+    if (!so) {
       return { status: 'invalid' };
     }
     
-    const dn = response.data[0];
-    
-    // We need to resolve the flow
-    const flow = dn.custom_event_pickup_option || 'BOOTH';
-    
-    // Ensure Picking is complete
-    if (!isFrappeChecked(dn.custom_event_is_picked)) {
-      return { status: 'invalid' };
+    if (so.custom_pick_up_code) {
+      pickupCodeToSearch = so.custom_pick_up_code;
     }
     
-    // Both BOOTH and STATION_PICKUP require docstatus === 1 for Customer Pickup
-    if (dn.docstatus !== 1) {
-      // Return invalid because it hasn't been submitted by Receive Picking yet
-      return { status: 'invalid' };
-    }
-    
-    // Fetch items for display
-    const detailResponse = await apiClient.get(`/api/resource/Delivery Note/${encodeURIComponent(dn.name)}`);
-    const dnDetail = detailResponse?.data;
-    
-    // Let's check Sales Invoice to see if already picked up
+    // 2. Dapatkan Sales Invoice terkait dengan pickup code (untuk cek apakah sudah diambil)
+    let invoiceDetail = null;
     try {
-      const invoices = await getSalesInvoicesByPickupCode(pickupCode);
-      if (invoices.length > 0 && isFrappeChecked(invoices[0].custom_picked_up)) {
-         return { 
-           status: 'already-picked-up',
-           order: { orderId: dn.name }
-         };
+      const invoices = await getSalesInvoicesByPickupCode(pickupCodeToSearch);
+      if (invoices && invoices.length > 0) {
+        invoiceDetail = invoices[0];
       }
     } catch (e) {
-      // Ignore
+      console.warn('Failed to fetch sales invoice by pickup code', e);
     }
+    
+    if (!invoiceDetail) {
+      // Tidak ada Sales Invoice (pesanan belum selesai)
+      return { status: 'not-ready' };
+    }
+    
+    // 3. Cek custom_picked_up dari Sales Invoice
+    if (isFrappeChecked(invoiceDetail.custom_picked_up)) {
+       return { 
+         status: 'already-picked-up',
+         order: { orderId: so.name }
+       };
+    }
+    
+    // 4. Map items DARI SALES ORDER (karena diminta menampilkan data sales order-nya)
+    let aggregatedItems = [];
+    let totalQty = 0;
+    
+    const items = so.items || [];
+    items.forEach(item => {
+      aggregatedItems.push({
+        name: item.item_name,
+        quantity: item.qty,
+        price: item.rate
+      });
+      totalQty += (item.qty || 0);
+    });
     
     return {
       status: 'success',
       order: {
-        orderId: dn.name, // The Delivery Note ID
-        pickupCode: dn.custom_pick_up_code || pickupCode,
-        customerName: dn.customer_name || dn.customer,
-        custom_event_pickup_option: dn.custom_event_pickup_option,
-        items: (dnDetail?.items || []).map(item => ({
-          name: item.item_name,
-          quantity: item.qty,
-          price: item.rate
-        })),
-        totalQty: dn.total_qty,
-        total: dn.grand_total,
+        orderId: so.name, // Use SO name as orderId for UI consistency if preferred
+        pickupCode: pickupCodeToSearch,
+        salesOrderName: so.name,
+        salesInvoiceName: invoiceDetail.name,
+        customerName: so.customer_name || so.customer,
+        custom_event_pickup_option: so.custom_event_pickup_option,
+        items: aggregatedItems,
+        totalQty: totalQty,
+        total: so.grand_total,
         status: 'ready'
       }
     };
@@ -105,48 +108,30 @@ export const validatePickupQr = async (code) => {
   }
 };
 
-export const confirmPickup = async (pickupCode) => {
-  if (!pickupCode) {
-    return { success: false, error: 'Kode pickup tidak valid.', status: 'api_error' };
+export const confirmPickup = async (salesInvoiceName) => {
+  if (!salesInvoiceName) {
+    return { success: false, error: 'Sales Invoice tidak valid.', status: 'api_error' };
   }
 
   try {
-    // Look up the Delivery Note
-    const endpoint = '/api/resource/Delivery Note';
-    const filters = [
-      ["custom_pick_up_code", "=", pickupCode]
-    ];
-    const response = await apiClient.get(endpoint, {
-      filters: JSON.stringify(filters),
-      fields: JSON.stringify(["name", "docstatus", "custom_event_is_picked", "custom_event_pickup_option"])
-    });
+    const { getSalesInvoice, updateSalesInvoicePickedUp } = await import('../api/salesInvoice');
     
-    if (!response?.data || response.data.length === 0) {
-      return { success: false, error: 'Delivery Note tidak ditemukan.', status: 'dn_not_found' };
-    }
-    
-    const { resolvePickupFlow } = await import('../utils/pickupFlow');
-    
-    // Check if already picked up by checking Sales Invoice
+    // Check if already picked up
     try {
-      const invoices = await getSalesInvoicesByPickupCode(pickupCode);
-      if (invoices.length > 0 && isFrappeChecked(invoices[0].custom_picked_up)) {
+      const invoice = await getSalesInvoice(salesInvoiceName);
+      if (invoice && isFrappeChecked(invoice.custom_picked_up)) {
         return { success: false, error: 'Pesanan ini sudah diambil oleh customer.', status: 'already-picked-up' };
       }
     } catch (e) {
       console.warn('Failed to check sales invoice status', e);
     }
     
-    // Note: We DO NOT submit Delivery Note here. Receive Picking handles Submit DN.
-    // If we reached here, dn.docstatus must be 1. We just update Sales Invoice.
-    
+    // Update Sales Invoice
     try {
-      const invoices = await getSalesInvoicesByPickupCode(pickupCode);
-      if (invoices.length > 0) {
-        await updateSalesInvoicePickedUp(invoices[0].name);
-      }
+      await updateSalesInvoicePickedUp(salesInvoiceName);
     } catch (legacyErr) {
-      console.warn("Failed to update legacy Sales Invoice custom_picked_up flag", legacyErr);
+      console.warn("Failed to update Sales Invoice custom_picked_up flag", legacyErr);
+      throw new Error("Gagal melakukan update pada Sales Invoice. " + legacyErr.message);
     }
     
     return { success: true };

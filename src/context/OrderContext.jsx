@@ -343,6 +343,83 @@ export const OrderProvider = ({ children }) => {
     return true;
   };
 
+  const decrementPickedQty = async (barcode) => {
+    if (!activeOrder) return;
+    
+    // Find item matching the barcode
+    const itemIndex = activeOrder.items.findIndex(i => 
+      (i.barcode && i.barcode === barcode) || 
+      i.itemCode === barcode
+    );
+    
+    if (itemIndex === -1) {
+      showToast('Barcode tidak ditemukan pada Delivery Note.', 'error');
+      return false;
+    }
+
+    const itemToPick = activeOrder.items[itemIndex];
+    const currentQty = itemToPick.pickedQty || 0;
+
+    if (currentQty <= 0) {
+      return false;
+    }
+
+    // Update frontend state only
+    setActiveOrder(prev => {
+      const newItems = [...prev.items];
+      const newQty = currentQty - 1;
+      newItems[itemIndex] = { 
+        ...newItems[itemIndex], 
+        pickedQty: newQty,
+        isPicked: false 
+      };
+      return { ...prev, items: newItems };
+    });
+    
+    return true;
+  };
+
+  const setPickedQty = async (barcode, newQtyValue) => {
+    if (!activeOrder) return;
+    
+    // Find item matching the barcode
+    const itemIndex = activeOrder.items.findIndex(i => 
+      (i.barcode && i.barcode === barcode) || 
+      i.itemCode === barcode
+    );
+    
+    if (itemIndex === -1) {
+      showToast('Barcode tidak ditemukan pada Delivery Note.', 'error');
+      return false;
+    }
+
+    const itemToPick = activeOrder.items[itemIndex];
+    const maxQty = itemToPick.qty || 0;
+    
+    let parsedQty = parseInt(newQtyValue, 10);
+    if (isNaN(parsedQty) || parsedQty < 0) {
+      parsedQty = 0;
+    }
+    
+    if (parsedQty > maxQty) {
+      showToast('Qty melebihi jumlah barang.', 'error');
+      parsedQty = maxQty;
+    }
+
+    // Update frontend state only
+    setActiveOrder(prev => {
+      const newItems = [...prev.items];
+      newItems[itemIndex] = { 
+        ...newItems[itemIndex], 
+        pickedQty: parsedQty,
+        isPicked: parsedQty >= maxQty 
+      };
+      return { ...prev, items: newItems };
+    });
+    
+    return true;
+  };
+
   const completeOrder = async () => {
     if (!activeOrder) return false;
     
@@ -396,6 +473,8 @@ export const OrderProvider = ({ children }) => {
       clearActiveOrder,
       resumePicking,
       incrementPickedQty,
+      decrementPickedQty,
+      setPickedQty,
       completeOrder,
       fetchOrders,
       fetchDeliveryNotes,
