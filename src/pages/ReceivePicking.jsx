@@ -151,6 +151,7 @@ const ReceivePicking = () => {
     let successMessages = [];
     
     try {
+      let finalPickupCode = null;
       if (isBatchMode) {
         for (const dn of candidateDns) {
           const resp = await submitFrappeDeliveryNote(dn);
@@ -163,6 +164,10 @@ const ReceivePicking = () => {
         const dn = candidateDns[0];
         const submitResponse = await submitDeliveryNote(dn.name || dn.deliveryNoteNo);
         const submitMsg = submitResponse?.message || {};
+        
+        if (submitMsg.custom_pick_up_code) {
+          finalPickupCode = submitMsg.custom_pick_up_code;
+        }
         
         if (submitMsg.status === 'success') {
           if (submitMsg.docstatus !== 1) {
@@ -182,8 +187,11 @@ const ReceivePicking = () => {
         }
       }
       
-      const isBatch = isBatchMode;
-      const baseMsg = isBatch ? 'Berhasil men-submit seluruh Delivery Note secara Batch!' : 'Berhasil menerima barang dan mensubmit Delivery Note!';
+      let baseMsg = isBatchMode ? 'Berhasil men-submit seluruh Delivery Note secara Batch!' : 'Berhasil menerima barang dan mensubmit Delivery Note!';
+      
+      if (finalPickupCode) {
+        baseMsg = `Berhasil submit DN. Kode Pickup: ${finalPickupCode}`;
+      }
       
       showToast(baseMsg, 'success');
       navigate('/');
