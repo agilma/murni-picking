@@ -1,16 +1,11 @@
 import React from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { Home, QrCode, LogOut, Settings } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { Home, QrCode, Settings } from 'lucide-react';
+import { useAuth, useCapabilities } from '../context/AuthContext';
 
 const AppShell = () => {
-  const { logout } = useAuth();
-  const navigate = useNavigate();
-
-  const handleLogout = async () => {
-    await logout();
-    navigate('/login');
-  };
+  const { user } = useAuth();
+  const capabilities = useCapabilities();
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: 'var(--bg-secondary)', position: 'relative' }}>
@@ -35,30 +30,34 @@ const AppShell = () => {
         maxWidth: '480px',
         margin: '0 auto'
       }}>
-        <NavLink 
-          to="/" 
-          end
-          style={({ isActive }) => ({
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
-            color: isActive ? 'var(--accent-primary)' : 'var(--text-muted)',
-            textDecoration: 'none', fontSize: '12px', fontWeight: '500'
-          })}
-        >
-          <Home size={20} />
-          <span>Home</span>
-        </NavLink>
+        {capabilities.canPicking && (
+          <NavLink 
+            to="/" 
+            end
+            style={({ isActive }) => ({
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
+              color: isActive ? 'var(--accent-primary)' : 'var(--text-muted)',
+              textDecoration: 'none', fontSize: '12px', fontWeight: '500'
+            })}
+          >
+            <Home size={20} />
+            <span>Home</span>
+          </NavLink>
+        )}
 
-        <NavLink 
-          to="/pickup" 
-          style={({ isActive }) => ({
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
-            color: isActive ? 'var(--accent-primary)' : 'var(--text-muted)',
-            textDecoration: 'none', fontSize: '12px', fontWeight: '500'
-          })}
-        >
-          <QrCode size={20} />
-          <span>Pickup</span>
-        </NavLink>
+        {capabilities.canCustomerPickup && (
+          <NavLink 
+            to="/pickup" 
+            style={({ isActive }) => ({
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
+              color: isActive ? 'var(--accent-primary)' : 'var(--text-muted)',
+              textDecoration: 'none', fontSize: '12px', fontWeight: '500'
+            })}
+          >
+            <QrCode size={20} />
+            <span>Pickup</span>
+          </NavLink>
+        )}
 
         <NavLink 
           to="/settings" 
@@ -71,19 +70,6 @@ const AppShell = () => {
           <Settings size={20} />
           <span>Pengaturan</span>
         </NavLink>
-
-        <button 
-          onClick={handleLogout}
-          style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
-            color: 'var(--text-muted)',
-            background: 'none', border: 'none', cursor: 'pointer',
-            fontSize: '12px', fontWeight: '500', padding: 0
-          }}
-        >
-          <LogOut size={20} />
-          <span>Keluar</span>
-        </button>
       </div>
     </div>
   );

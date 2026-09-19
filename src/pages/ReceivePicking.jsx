@@ -166,7 +166,9 @@ const ReceivePicking = () => {
           const originalDn = candidateDns.find(dn => (dn.name || dn.deliveryNoteNo) === res.delivery_note);
           return {
             ...res,
-            custom_pick_up_code: res.custom_pick_up_code || (originalDn ? originalDn.custom_pick_up_code : null)
+            custom_pick_up_code: res.custom_pick_up_code || (originalDn ? originalDn.custom_pick_up_code : null),
+            customer: originalDn ? (originalDn.customer || originalDn.customer_name) : '-',
+            custom_event_pickup_option: originalDn ? originalDn.custom_event_pickup_option : '-'
           };
         });
 
@@ -186,7 +188,14 @@ const ReceivePicking = () => {
         const submitMsg = submitResponse?.message || {};
         
         if (submitMsg.status === 'success') {
-          successRespData = submitMsg;
+          successRespData = {
+            ...submitMsg,
+            sales_order: submitMsg.sales_order || dn.against_sales_order || dn.sales_order || '-',
+            delivery_note: submitMsg.delivery_note || dn.name || dn.deliveryNoteNo,
+            customer: dn.customer || dn.customer_name || '-',
+            custom_event_pickup_option: dn.custom_event_pickup_option || '-'
+          };
+          
           if (submitMsg.custom_pick_up_code) {
             finalPickupCode = submitMsg.custom_pick_up_code;
           }
@@ -200,7 +209,6 @@ const ReceivePicking = () => {
         } else if (submitMsg.docstatus !== undefined && submitMsg.docstatus !== 1) {
             throw new Error(`Delivery Note ${dn.name} gagal berubah status.`);
         } else {
-          // Additional fallback if it's not a clear error but status isn't 1
           if (submitResponse?.docstatus !== undefined && submitResponse?.docstatus !== 1) {
               throw new Error(`Delivery Note ${dn.name} gagal berubah status.`);
           }
@@ -252,11 +260,31 @@ const ReceivePicking = () => {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <div style={{ fontWeight: '700', fontSize: '16px', color: 'var(--text-primary)' }}>{item.sales_order}</div>
                     <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{item.delivery_note}</div>
+                    
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', color: 'var(--text-primary)', marginTop: '4px' }}>
+                      <User size={14} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+                      <span style={{ fontWeight: '500' }}>{item.customer}</span>
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
-                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '600' }}>KODE PICKUP</div>
-                    <div style={{ padding: '4px 10px', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px', fontSize: '16px', fontWeight: '800', color: 'var(--primary-color)' }}>
-                      {item.custom_pick_up_code || '-'}
+                </div>
+                
+                <div style={{ 
+                  marginTop: '12px',
+                  padding: '12px', 
+                  backgroundColor: 'var(--bg-secondary)', 
+                  borderTop: '1px solid var(--border-color)',
+                  borderRadius: '0 0 8px 8px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Informasi Ambil Barang</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Store size={18} color="var(--accent-primary)" />
+                      <span style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-primary)' }}>
+                        {item.custom_event_pickup_option || '-'}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -289,13 +317,30 @@ const ReceivePicking = () => {
             <div style={{ fontSize: '13px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sales Order</div>
             <div style={{ fontSize: '22px', fontWeight: '700', color: 'var(--text-primary)' }}>{data.sales_order}</div>
           </div>
-          <div style={{ marginBottom: '24px' }}>
+          <div style={{ marginBottom: '16px', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
             <div style={{ fontSize: '13px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Delivery Note</div>
             <div style={{ fontSize: '15px', fontWeight: '500', color: 'var(--text-secondary)' }}>{data.delivery_note}</div>
           </div>
-          <div style={{ padding: '20px', backgroundColor: 'var(--bg-secondary)', borderRadius: '12px', textAlign: 'center', border: '2px dashed #cbd5e1' }}>
-            <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '8px', fontWeight: '500' }}>KODE PICKUP</div>
-            <div style={{ fontSize: '26px', fontWeight: '800', color: 'var(--primary-color)', letterSpacing: '1px', wordBreak: 'break-all' }}>{data.custom_pick_up_code}</div>
+          
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Customer</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <User size={18} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+              <div style={{ fontSize: '16px', fontWeight: '600', color: 'var(--text-primary)' }}>{data.customer}</div>
+            </div>
+          </div>
+          
+          <div style={{ 
+            padding: '16px', 
+            backgroundColor: 'var(--bg-secondary)', 
+            borderRadius: '12px', 
+            border: '1px solid var(--border-color)'
+          }}>
+            <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '8px' }}>Informasi Ambil Barang</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Store size={22} color="var(--accent-primary)" style={{ flexShrink: 0 }} />
+              <div style={{ fontSize: '20px', fontWeight: '800', color: 'var(--text-primary)' }}>{data.custom_event_pickup_option}</div>
+            </div>
           </div>
         </div>
         

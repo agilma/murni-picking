@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Clock, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Clock, RefreshCw, Search, User, UserCheck, Store, ChevronRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { getDeliveryNoteHistory } from '../api/deliveryNote';
+import { fetchHistoryDeliveryNotes } from '../api/picking';
 
 const History = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, selectedBooth } = useAuth();
   
   const [historyItems, setHistoryItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -14,9 +14,11 @@ const History = () => {
   const [error, setError] = useState(null);
   const [hasMore, setHasMore] = useState(true);
   const [offset, setOffset] = useState(0);
+  const [search, setSearch] = useState('');
+  const searchTimeoutRef = useRef(null);
   const limit = 20;
 
-  const fetchHistory = useCallback(async (isLoadMore = false) => {
+  const fetchHistory = useCallback(async (isLoadMore = false, searchQuery = search) => {
     if (!user || !user.username) {
       setError('User session not available');
       setLoading(false);
@@ -33,7 +35,15 @@ const History = () => {
     }
 
     try {
-      const data = await getDeliveryNoteHistory(user.username, limit, currentOffset);
+      const page = Math.floor(currentOffset / limit) + 1;
+      const rawData = await fetchHistoryDeliveryNotes(searchQuery, page, limit, selectedBooth?.name, user.username);
+      
+      const data = rawData.map(item => ({
+        ...item,
+        isPicked: item.custom_event_is_picked === 1,
+        salesOrderNo: item.items && item.items.length > 0 ? item.items[0].against_sales_order : null,
+        pickedBy: item.custom_picked_by
+      }));
       
       if (isLoadMore) {
         setHistoryItems(prev => [...prev, ...data]);
@@ -53,34 +63,65 @@ const History = () => {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [user, limit, offset]);
+  }, [user, limit, offset, search, selectedBooth]);
 
   useEffect(() => {
     fetchHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  // Debounce search
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    
+    searchTimeoutRef.current = setTimeout(() => {
+      // Don't refetch on initial render empty string if we already fetched
+      fetchHistory(false, search);
+    }, 500);
+    
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [search]); // Intentionally omitting fetchHistory
+
   const handleRetry = () => {
-    fetchHistory();
+    fetchHistory(false, search);
+  };
+
+  const handleRefresh = () => {
+    fetchHistory(false, search);
   };
 
   const handleLoadMore = () => {
     if (!loadingMore && hasMore) {
-      fetchHistory(true);
+      fetchHistory(true, search);
     }
   };
 
   const formatDate = (dateStr, timeStr) => {
     if (!dateStr) return '';
     try {
-      const d = new Date(dateStr);
+      const dateParts = dateStr.split('-');
+      if (dateParts.length !== 3) return dateStr;
+      
+      const year = parseInt(dateParts[0], 10);
+      const month = parseInt(dateParts[1], 10) - 1;
+      const day = parseInt(dateParts[2], 10);
+      
+      const d = new Date(year, month, day);
       const options = { day: 'numeric', month: 'short', year: 'numeric' };
       const dateFormatted = d.toLocaleDateString('id-ID', options);
-      return `${dateFormatted} • ${timeStr ? timeStr.substring(0, 5) : ''}`;
+      return `${dateFormatted} ${timeStr ? timeStr.substring(0, 5) + ' WIB' : ''}`;
     } catch {
       return dateStr;
     }
   };
+
+
 
   return (
     <div style={{
@@ -126,6 +167,37 @@ const History = () => {
         </div>
       </div>
 
+      <div style={{ padding: '16px 16px 0 16px', display: 'flex', gap: '8px', backgroundColor: 'var(--bg-primary)' }}>
+        <div style={{ position: 'relative', flex: 1 }}>
+          <Search style={{ position: 'absolute', top: '12px', left: '16px', color: 'var(--text-muted)' }} size={20} />
+          <input
+            type="text"
+            className="search-input"
+            placeholder="Cari nomor SO / DN..."
+            style={{ paddingLeft: '48px', width: '100%', height: '44px', borderRadius: '12px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-elevated)' }}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <button 
+          onClick={handleRefresh}
+          disabled={loading}
+          className="btn btn-secondary"
+          style={{ 
+            display: 'flex', 
+            justifyContent: 'center',
+            alignItems: 'center', 
+            width: '44px',
+            height: '44px',
+            padding: '0',
+            flexShrink: 0,
+            borderRadius: '12px'
+          }}
+        >
+          <RefreshCw size={20} className={loading ? "spin-animation" : ""} />
+        </button>
+      </div>
+
       {/* Content area */}
       <div style={{
         flex: 1,
@@ -153,40 +225,116 @@ const History = () => {
           </div>
         ) : (
           <>
-            {historyItems.map((item, idx) => (
-              <div 
-                key={item.name || idx} 
-                onClick={() => navigate(`/history/${encodeURIComponent(item.name)}`)}
-                style={{
-                  backgroundColor: 'var(--bg-elevated)',
-                  borderRadius: '8px',
-                  padding: '16px',
-                  border: '1px solid var(--border-color)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '4px',
-                  cursor: 'pointer'
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: '700', margin: 0, color: 'var(--text-primary)' }}>
-                    {item.name}
-                  </h3>
-                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    {formatDate(item.posting_date, item.posting_time)}
-                  </span>
+            {historyItems.map((item, idx) => {
+              return (
+                <div 
+                  key={item.name || idx}
+                  style={{
+                    backgroundColor: 'var(--bg-elevated)',
+                    borderRadius: '12px',
+                    border: '1px solid var(--border-color)',
+                    overflow: 'hidden',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                    position: 'relative'
+                  }}
+                >
+                  <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div style={{ fontWeight: '800', fontSize: '20px', color: 'var(--text-primary)' }}>{item.salesOrderNo || item.against_sales_order || '-'}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <div style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: '500' }}>{item.name}</div>
+                          {item.custom_event_booth && (
+                            <>
+                              <span style={{ color: 'var(--text-muted)' }}>•</span>
+                              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{item.custom_event_booth}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div style={{ 
+                        backgroundColor: 'var(--bg-secondary)', 
+                        color: 'var(--text-secondary)',
+                        border: '1px solid var(--border-color)',
+                        padding: '6px 10px', 
+                        borderRadius: '12px', 
+                        fontSize: '12px', 
+                        fontWeight: '600',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}>
+                        Selesai
+                      </div>
+                    </div>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', fontSize: '14px', color: 'var(--text-primary)' }}>
+                        <User size={16} color="var(--text-muted)" style={{ marginTop: '2px', flexShrink: 0 }} />
+                        <span style={{ fontWeight: '500', wordBreak: 'break-word' }}>{item.customer || '-'}</span>
+                      </div>
+                      {item.custom_picked_by && (
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', fontSize: '14px', color: 'var(--text-secondary)' }}>
+                          <UserCheck size={16} color="var(--text-muted)" style={{ flexShrink: 0, marginTop: '2px' }} />
+                          <span style={{ fontWeight: '500', wordBreak: 'break-word' }}>Picker: {item.custom_picked_by}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {item.items && item.items.length > 0 && (
+                    <div style={{ 
+                      padding: '0 16px 12px 16px', 
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      gap: '4px' 
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '14px', marginBottom: '8px' }}>
+                        <div style={{ fontWeight: '600', color: 'var(--text-primary)' }}>
+                          {item.items.length} Produk
+                        </div>
+                        <div style={{ color: 'var(--text-secondary)' }}>
+                          ({item.items.reduce((total, i) => total + Number(i.qty || 0), 0)} pcs)
+                        </div>
+                      </div>
+                      {item.items.map((prod, i) => (
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                          <span style={{ color: 'var(--text-primary)', flex: 1, paddingRight: '8px' }}>{prod.item_name || prod.item_code}</span>
+                          <span style={{ fontWeight: '700', color: 'var(--text-primary)', flexShrink: 0 }}>{prod.qty}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div style={{ 
+                    padding: '12px 16px', 
+                    backgroundColor: 'var(--bg-secondary)', 
+                    borderTop: '1px solid var(--border-color)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Informasi Ambil Barang</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Store size={18} color="var(--text-muted)" />
+                        <span style={{ fontSize: '16px', fontWeight: '800', color: 'var(--text-primary)', textTransform: 'uppercase' }}>
+                          {item.custom_event_pickup_option || '-'}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                      <span style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: '500' }}>
+                        {formatDate(item.posting_date, item.posting_time)}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                
-                {item.against_sales_order && (
-                  <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: 'var(--text-primary)' }}>
-                    Sales Order: <strong>{item.against_sales_order}</strong>
-                  </p>
-                )}
-                <p style={{ margin: '2px 0 0 0', fontSize: '14px', color: 'var(--text-secondary)' }}>
-                  Customer: {item.customer || '-'}
-                </p>
-              </div>
-            ))}
+              );
+            })}
 
             {hasMore && (
               <button 

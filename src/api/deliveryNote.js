@@ -81,32 +81,88 @@ export const submitDeliveryNotePicking = async (name, items, pickedBy = null) =>
  * @param {string} userEmail - The email of the logged in user
  * @param {number} limit - Items per page
  * @param {number} offset - Offset for pagination
+ * @param {string} searchQuery - Optional search string
+ * @param {string} boothName - Optional booth name
  */
-export const getDeliveryNoteHistory = async (userEmail, limit = 20, offset = 0) => {
+export const getDeliveryNoteHistory = async (userEmail, limit = 20, offset = 0, searchQuery = '', boothName = '') => {
   if (!userEmail) return [];
   
   const endpoint = '/api/resource/Delivery Note';
   
   const filters = [
-    ["docstatus", "=", 1]
+    ["docstatus", "=", 1],
+    ["custom_picked_by", "=", userEmail]
   ];
+  
+  if (boothName) {
+    filters.push(["custom_event_booth", "in", [boothName]]);
+  }
+  
+  if (searchQuery) {
+    filters.push(["name", "like", `%${searchQuery}%`]);
+  }
   
   const fields = [
     "name", 
     "customer", 
     "posting_date", 
-    "posting_time"
+    "posting_time",
+    "custom_event_booth",
+    "custom_event_pickup_option",
+    "custom_picked_by",
+    "modified"
   ];
   
-  const response = await apiClient.get(endpoint, {
-    fields: JSON.stringify(fields),
-    filters: JSON.stringify(filters),
-    limit_page_length: limit,
-    limit_start: offset,
-    order_by: 'modified desc'
-  });
-  
-  return response?.data || [];
+  try {
+    const response = await apiClient.get(endpoint, {
+      fields: JSON.stringify(fields),
+      filters: JSON.stringify(filters),
+      limit_page_length: limit,
+      limit_start: offset,
+      order_by: 'modified desc' // using modified as proxy for submitted_at
+    });
+    
+    let dns = response?.data || [];
+    
+    if (dns.length > 0) {
+      // Fetch child items for these DNs to get against_sales_order and qty
+      const dnNames = dns.map(dn => dn.name);
+      const itemsEndpoint = '/api/resource/Delivery Note Item';
+      const itemsResponse = await apiClient.get(itemsEndpoint, {
+        filters: JSON.stringify([['parent', 'in', dnNames]]),
+        fields: JSON.stringify(['parent', 'against_sales_order', 'qty']),
+        limit_page_length: limit * 5
+      });
+      
+      const items = itemsResponse?.data || [];
+      
+      // Group items by parent
+      const itemsByParent = items.reduce((acc, item) => {
+        if (!acc[item.parent]) {
+          acc[item.parent] = [];
+        }
+        acc[item.parent].push(item);
+        return acc;
+      }, {});
+      
+      // Merge items into DNs
+      dns = dns.map(dn => {
+        const dnItems = itemsByParent[dn.name] || [];
+        const soNo = dnItems.length > 0 ? dnItems[0].against_sales_order : null;
+        return {
+          ...dn,
+          items: dnItems,
+          against_sales_order: soNo,
+          salesOrderNo: soNo // Map to same format as Home
+        };
+      });
+    }
+    
+    return dns;
+  } catch (error) {
+    console.error("Error fetching history:", error);
+    return [];
+  }
 };
 
 /**

@@ -81,14 +81,14 @@ export const OrderProvider = ({ children }) => {
     }
   };
 
-  const fetchDeliveryNotes = useCallback(async (searchQuery = '') => {
-    setLoading(true);
+  const fetchDeliveryNotes = useCallback(async (searchQuery = '', isAutoRefresh = false) => {
+    if (!isAutoRefresh) setLoading(true);
     setDnError(null);
     try {
       const [availableData, activeData] = await Promise.all([
-        apiFetchDeliveryNotes(searchQuery, 1, 100),
-        apiFetchActiveDeliveryNotes(searchQuery, 1, 100)
-      ]); 
+        apiFetchDeliveryNotes(searchQuery, 1, 100, user?.eventBooth),
+        apiFetchActiveDeliveryNotes(searchQuery, 1, 100, user?.eventBooth, getCurrentUserIdentifier())
+      ]);  
 
       const mapDNs = (data) => data.map(item => ({
         deliveryNoteNo: item.name,
@@ -125,9 +125,9 @@ export const OrderProvider = ({ children }) => {
       setDeliveryNotes([]);
       setActiveDeliveryNotes([]);
     } finally {
-      setLoading(false);
+      if (!isAutoRefresh) setLoading(false);
     }
-  }, []);
+  }, [user?.eventBooth]);
 
   useEffect(() => {
     if (isAuthenticated) {

@@ -248,7 +248,8 @@ const Picking = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', backgroundColor: 'var(--bg-primary)', overflow: 'hidden' }}>
-      <div className="header" style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingBottom: '16px', flexShrink: 0 }}>
+      <div style={{ flexGrow: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+        <div className="header" style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingBottom: '16px', flexShrink: 0 }}>
         <div 
           onClick={handleBack}
           style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--text-secondary)', cursor: 'pointer', fontWeight: '500', width: 'fit-content' }}
@@ -354,7 +355,7 @@ const Picking = () => {
         </form>
       </div>
 
-      <div style={{ padding: '12px 16px', backgroundColor: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', flexShrink: 0 }}>
+      <div style={{ padding: '12px 16px', backgroundColor: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 10, flexShrink: 0 }}>
         <span style={{ fontWeight: '600', fontSize: '14px' }}>Daftar Barang</span>
         
         {scanFeedback && (
@@ -378,7 +379,7 @@ const Picking = () => {
         )}
       </div>
 
-      <div className="flex-grow" style={{ overflowY: 'auto' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', paddingBottom: '16px' }}>
         {filteredItems.map((item, idx) => {
           const isCompleted = item.isPicked;
           
@@ -514,6 +515,7 @@ const Picking = () => {
             </div>
           );
         })}
+      </div>
       </div>
 
       <div className="sticky-bottom" style={{ display: 'flex', flexDirection: 'column', gap: '16px', flexShrink: 0 }}>

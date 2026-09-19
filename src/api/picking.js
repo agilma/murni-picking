@@ -4,7 +4,7 @@ import { isFrappeChecked } from '../utils/frappeUtils';
 /**
  * Fetch active/available Delivery Notes for picking.
  */
-export const fetchDeliveryNotes = async (searchQuery = '', page = 1, limit = 20) => {
+export const fetchDeliveryNotes = async (searchQuery = '', page = 1, limit = 20, eventBooth = null) => {
   const endpoint = '/api/method/thunder_erp.api.dn_picker.get_delivery_note';
   
   const params = {
@@ -12,6 +12,11 @@ export const fetchDeliveryNotes = async (searchQuery = '', page = 1, limit = 20)
     custom_event_is_picked: 0,
     custom_picked_by: '["is","not set"]'
   };
+  
+  if (eventBooth && eventBooth.length > 0) {
+    const boothStr = Array.isArray(eventBooth) ? eventBooth[0] : eventBooth;
+    params.custom_event_booth = boothStr;
+  }
   if (searchQuery) {
     params.sales_order = searchQuery;
   }
@@ -34,14 +39,19 @@ export const fetchDeliveryNotes = async (searchQuery = '', page = 1, limit = 20)
   return list;
 };
 
-export const fetchActiveDeliveryNotes = async (searchQuery = '', page = 1, limit = 20) => {
+export const fetchActiveDeliveryNotes = async (searchQuery = '', page = 1, limit = 20, eventBooth = null, currentUser = null) => {
   const endpoint = '/api/method/thunder_erp.api.dn_picker.get_delivery_note';
   
   const params = {
     include_items: 1,
     custom_event_is_picked: 0,
-    custom_picked_by: '["is","set"]'
+    custom_picked_by: currentUser || '["is","set"]'
   };
+  
+  if (eventBooth && eventBooth.length > 0) {
+    const boothStr = Array.isArray(eventBooth) ? eventBooth[0] : eventBooth;
+    params.custom_event_booth = boothStr;
+  }
   if (searchQuery) {
     params.sales_order = searchQuery;
   }
@@ -58,6 +68,41 @@ export const fetchActiveDeliveryNotes = async (searchQuery = '', page = 1, limit
   
   if (!Array.isArray(list)) {
     console.error('[HOME] Invalid active delivery note response format', list);
+    return [];
+  }
+  
+  return list;
+};
+
+export const fetchHistoryDeliveryNotes = async (searchQuery = '', page = 1, limit = 20, eventBooth = null, currentUser = null) => {
+  const endpoint = '/api/method/thunder_erp.api.dn_picker.get_delivery_note';
+  
+  const params = {
+    include_items: 1,
+    docstatus: 1,
+    custom_picked_by: currentUser
+  };
+  
+  if (eventBooth && eventBooth.length > 0) {
+    const boothStr = Array.isArray(eventBooth) ? eventBooth[0] : eventBooth;
+    params.custom_event_booth = boothStr;
+  }
+  if (searchQuery) {
+    params.sales_order = searchQuery;
+  }
+  
+  const response = await apiClient.get(endpoint, params);
+  
+  console.log('[HISTORY] dn_picker history response', response);
+  
+  const list = response?.message;
+  
+  if (!list) {
+    return [];
+  }
+  
+  if (!Array.isArray(list)) {
+    console.error('[HISTORY] Invalid history delivery note response format', list);
     return [];
   }
   

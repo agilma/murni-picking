@@ -5,11 +5,74 @@ import { useAuth, useCapabilities } from '../context/AuthContext';
 import { Search, Package, MapPin, Barcode, Calendar, Truck, ClipboardList, ChevronLeft, RefreshCw, Clock, UserCheck, Inbox, User, Store } from 'lucide-react';
 import { resolvePickupFlow } from '../utils/pickupFlow';
 
+const getTimeElapsedProps = (dateStr, timeStr) => {
+  if (!dateStr) return { text: '-', color: 'var(--text-secondary)', fw: '500' };
+  
+  // Safely parse time and remove milliseconds if any to avoid parsing errors
+  const cleanTime = timeStr ? timeStr.split('.')[0] : '00:00:00';
+  
+  // Cross-browser foolproof parsing (avoid Date string parsing anomalies like in Safari)
+  const [year, month, day] = dateStr.split('-');
+  const [hour, minute, second] = cleanTime.split(':');
+  
+  const postingDate = new Date(
+    parseInt(year, 10), 
+    parseInt(month, 10) - 1, 
+    parseInt(day, 10), 
+    parseInt(hour, 10), 
+    parseInt(minute, 10), 
+    parseInt(second || 0, 10)
+  );
+  
+  // Return fallback if date is invalid instead of hiding the element entirely
+  if (isNaN(postingDate.getTime())) {
+    return { text: 'Waktu tidak valid', color: 'var(--text-secondary)', fw: '500' };
+  }
+  
+  const now = new Date();
+  const diffMs = now - postingDate;
+  const diffMins = Math.floor(diffMs / 60000);
+  
+  if (diffMins < 0) return { text: 'Baru saja', color: 'var(--text-secondary)', fw: '500' };
+  
+  let color = 'var(--text-secondary)'; // < 5 mins
+  let fw = '500';
+  if (diffMins >= 30) {
+    color = 'var(--error-color)';
+    fw = '700';
+  } else if (diffMins >= 15) {
+    color = '#f59e0b'; // orange
+    fw = '600';
+  } else if (diffMins >= 5) {
+    color = '#3b82f6'; // blue
+    fw = '600';
+  }
+
+  const text = diffMins >= 60 
+    ? `${Math.floor(diffMins/60)}j ${diffMins%60}m yang lalu` 
+    : `${diffMins} menit yang lalu`;
+
+  return { text, color, fw };
+};
+
 const Home = () => {
   const [search, setSearch] = useState('');
   const [selectedDN, setSelectedDN] = useState(null); // Local state for Detail DN
   const [showLastPickedModal, setShowLastPickedModal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isAutoRefreshing, setIsAutoRefreshing] = useState(false);
+  
+  const { user } = useAuth();
+  const capabilities = useCapabilities();
+  const navigate = useNavigate();
+
+  // Redirect users who don't have picking capabilities
+  useEffect(() => {
+    // Make sure we have loaded capabilities before redirecting
+    if (capabilities && !capabilities.canPicking) {
+      navigate('/pickup', { replace: true });
+    }
+  }, [capabilities, navigate]);
   
   // Pull to refresh states
   const [startY, setStartY] = useState(0);
@@ -31,9 +94,6 @@ const Home = () => {
     activePickingId,
     resumePicking
   } = useOrders();
-  const { user } = useAuth();
-  const capabilities = useCapabilities();
-  const navigate = useNavigate();
   const [loadingDetail, setLoadingDetail] = useState(false);
 
   const handleRefresh = async () => {
@@ -54,6 +114,26 @@ const Home = () => {
 
     return () => clearTimeout(timer);
   }, [search, fetchDeliveryNotes]);
+
+  // Auto-refresh effect
+  useEffect(() => {
+    const intervalSeconds = parseInt(localStorage.getItem('refreshInterval')) || 45;
+    const intervalMs = intervalSeconds * 1000;
+    
+    const timer = setInterval(async () => {
+      // Only auto-refresh if not already refreshing manually, not searching, and not in detail view
+      if (!isRefreshing && search === '' && !loadingDetail && !selectedDN) {
+        setIsAutoRefreshing(true);
+        try {
+          await fetchDeliveryNotes('', true);
+        } finally {
+          setIsAutoRefreshing(false);
+        }
+      }
+    }, intervalMs);
+
+    return () => clearInterval(timer);
+  }, [isRefreshing, search, loadingDetail, selectedDN, fetchDeliveryNotes]);
 
   const handleSelectDN = async (dnObject) => {
     // Show skeleton or old data while loading
@@ -131,6 +211,7 @@ const Home = () => {
       onTouchEnd={handleTouchEnd}
       style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}
     >
+      {isAutoRefreshing && <div className="loading-bar" />}
       {isPulling && (
         <div style={{
           height: `${pullDistance}px`,
@@ -153,8 +234,20 @@ const Home = () => {
       <div className="header" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h1 className="text-xl">Murni-Booth</h1>
-          <div style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: '500' }}>
-            mode: {user?.roleProfile || 'Unknown'}
+          <div style={{ 
+            fontSize: '13px', 
+            color: 'var(--accent-primary)', 
+            fontWeight: '700', 
+            backgroundColor: 'rgba(59, 130, 246, 0.1)', 
+            padding: '6px 12px', 
+            borderRadius: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            border: '1px solid rgba(59, 130, 246, 0.2)'
+          }}>
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--accent-primary)', animation: 'pulse 2s infinite' }}></div>
+            MODE: {user?.roleProfile?.toUpperCase() || 'UNKNOWN'}
           </div>
         </div>
       </div>
@@ -162,6 +255,25 @@ const Home = () => {
       <style>{`
         .spin-animation { animation: spin 1s linear infinite; }
         @keyframes spin { 100% { transform: rotate(360deg); } }
+        .loading-bar {
+          position: fixed;
+          top: 0;
+          left: 0;
+          height: 3px;
+          background-color: var(--accent-primary);
+          z-index: 9999;
+          animation: loading-bar-anim 1.5s infinite ease-in-out;
+        }
+        @keyframes loading-bar-anim {
+          0% { left: -30%; width: 30%; }
+          50% { left: 30%; width: 40%; }
+          100% { left: 100%; width: 30%; }
+        }
+        @keyframes pulse {
+          0% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.5); opacity: 0.5; }
+          100% { transform: scale(1); opacity: 1; }
+        }
       `}</style>
 
       {!selectedDN && (
@@ -465,7 +577,15 @@ const Home = () => {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <div style={{ fontWeight: '800', fontSize: '20px', color: 'var(--text-primary)' }}>{dn.salesOrderNo || '-'}</div>
-                        <div style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: '500' }}>{dn.deliveryNoteNo}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <div style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: '500' }}>{dn.deliveryNoteNo}</div>
+                          {dn.custom_event_booth && (
+                            <>
+                              <span style={{ color: 'var(--text-muted)' }}>•</span>
+                              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{dn.custom_event_booth}</span>
+                            </>
+                          )}
+                        </div>
                       </div>
                       <div style={{ 
                         backgroundColor: dn.pickedBy === (user?.email || user?.name) ? 'var(--accent-primary)' : 'var(--warning-color, #f59e0b)', 
@@ -483,21 +603,25 @@ const Home = () => {
                       </div>
                     </div>
                     
-                    {dn.customer && (
-                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', fontSize: '14px', color: 'var(--text-primary)' }}>
-                        <User size={16} color="var(--text-muted)" style={{ flexShrink: 0, marginTop: '2px' }} />
-                        <span style={{ fontWeight: '500', wordBreak: 'break-word' }}>{dn.customer}</span>
-                      </div>
-                    )}
+                    {(dn.customer || (dn.pickedBy && dn.pickedBy !== (user?.email || user?.name))) && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        {dn.customer && (
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', fontSize: '14px', color: 'var(--text-primary)' }}>
+                            <User size={16} color="var(--text-muted)" style={{ flexShrink: 0, marginTop: '2px' }} />
+                            <span style={{ fontWeight: '500', wordBreak: 'break-word' }}>{dn.customer}</span>
+                          </div>
+                        )}
 
-                    {dn.pickedBy && dn.pickedBy !== (user?.email || user?.name) && (
-                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', fontSize: '14px', color: 'var(--text-secondary)' }}>
-                        <UserCheck size={16} color="var(--warning-color, #f59e0b)" style={{ flexShrink: 0, marginTop: '2px' }} />
-                        <span style={{ fontWeight: '500', wordBreak: 'break-word', color: 'var(--warning-color, #f59e0b)' }}>Picker: {dn.pickedBy}</span>
+                        {dn.pickedBy && dn.pickedBy !== (user?.email || user?.name) && (
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', fontSize: '14px', color: 'var(--text-secondary)' }}>
+                            <UserCheck size={16} color="var(--warning-color, #f59e0b)" style={{ flexShrink: 0, marginTop: '2px' }} />
+                            <span style={{ fontWeight: '500', wordBreak: 'break-word', color: 'var(--warning-color, #f59e0b)' }}>Picker: {dn.pickedBy}</span>
+                          </div>
+                        )}
                       </div>
                     )}
                     
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed var(--border-color)' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '14px' }}>
                         <div style={{ fontWeight: '600', color: 'var(--text-primary)' }}>
                           {dn.items?.length || 0} Produk
@@ -506,27 +630,41 @@ const Home = () => {
                           ({dn.items?.reduce((total, item) => total + Number(item.qty || 0), 0) || 0} pcs)
                         </div>
                       </div>
-                      
-                      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px', backgroundColor: 'var(--bg-secondary)', padding: '6px 10px', borderRadius: '8px', fontSize: '13px' }}>
-                        <span style={{ color: 'var(--text-secondary)' }}>Ambil barang di:</span>
-                        <span style={{ fontWeight: '700', color: 'var(--primary-color)' }}>{dn.custom_event_pickup_option || '-'}</span>
-                        {dn.custom_event_booth && (
-                          <>
-                            <span style={{ color: 'var(--text-muted)' }}>•</span>
-                            <span style={{ color: 'var(--text-secondary)' }}>Booth:</span>
-                            <span style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{dn.custom_event_booth}</span>
-                          </>
-                        )}
-                      </div>
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
-                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                        {dn.postingDate ? new Date(dn.postingDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}
-                        {dn.postingTime ? ` ${dn.postingTime.substring(0, 5)} WIB` : ''}
+                    <div style={{ 
+                      padding: '12px 16px', 
+                      backgroundColor: 'var(--bg-secondary)', 
+                      borderTop: '1px solid var(--border-color)',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      margin: '12px -16px -16px -16px',
+                      borderRadius: '0 0 12px 12px'
+                    }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Informasi Ambil Barang</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <Store size={18} color="var(--accent-primary)" />
+                          <span style={{ fontSize: '16px', fontWeight: '800', color: 'var(--text-primary)', textTransform: 'uppercase' }}>
+                            {dn.custom_event_pickup_option || '-'}
+                          </span>
+                        </div>
                       </div>
-                      <div style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: '600', display: 'flex', alignItems: 'center' }}>
-                        Detail
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                        {(() => {
+                          const elapsed = getTimeElapsedProps(dn.postingDate, dn.postingTime);
+                          if (!elapsed) return null;
+                          return (
+                            <div style={{ fontSize: '13px', color: elapsed.color, fontWeight: elapsed.fw, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <Clock size={12} /> {elapsed.text}
+                            </div>
+                          );
+                        })()}
+                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                          {dn.postingDate ? new Date(dn.postingDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}
+                          {dn.postingTime ? ` ${dn.postingTime.substring(0, 5)} WIB` : ''}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -542,7 +680,15 @@ const Home = () => {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <div style={{ fontWeight: '800', fontSize: '20px', color: 'var(--text-primary)' }}>{dn.salesOrderNo || '-'}</div>
-                        <div style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: '500' }}>{dn.deliveryNoteNo}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <div style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: '500' }}>{dn.deliveryNoteNo}</div>
+                          {dn.custom_event_booth && (
+                            <>
+                              <span style={{ color: 'var(--text-muted)' }}>•</span>
+                              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{dn.custom_event_booth}</span>
+                            </>
+                          )}
+                        </div>
                       </div>
                       <div style={{ 
                         backgroundColor: 'var(--bg-secondary)', 
@@ -567,7 +713,7 @@ const Home = () => {
                       </div>
                     )}
                     
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed var(--border-color)' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '14px' }}>
                         <div style={{ fontWeight: '600', color: 'var(--text-primary)' }}>
                           {dn.items?.length || 0} Produk
@@ -576,27 +722,41 @@ const Home = () => {
                           ({dn.items?.reduce((total, item) => total + Number(item.qty || 0), 0) || 0} pcs)
                         </div>
                       </div>
-                      
-                      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px', backgroundColor: 'var(--bg-secondary)', padding: '6px 10px', borderRadius: '8px', fontSize: '13px' }}>
-                        <span style={{ color: 'var(--text-secondary)' }}>Ambil barang di:</span>
-                        <span style={{ fontWeight: '700', color: 'var(--primary-color)' }}>{dn.custom_event_pickup_option || '-'}</span>
-                        {dn.custom_event_booth && (
-                          <>
-                            <span style={{ color: 'var(--text-muted)' }}>•</span>
-                            <span style={{ color: 'var(--text-secondary)' }}>Booth:</span>
-                            <span style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{dn.custom_event_booth}</span>
-                          </>
-                        )}
-                      </div>
                     </div>
                     
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
-                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                        {dn.postingDate ? new Date(dn.postingDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}
-                        {dn.postingTime ? ` ${dn.postingTime.substring(0, 5)} WIB` : ''}
+                    <div style={{ 
+                      padding: '12px 16px', 
+                      backgroundColor: 'var(--bg-secondary)', 
+                      borderTop: '1px solid var(--border-color)',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      margin: '12px -16px -16px -16px',
+                      borderRadius: '0 0 12px 12px'
+                    }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Informasi Ambil Barang</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <Store size={18} color="var(--accent-primary)" />
+                          <span style={{ fontSize: '16px', fontWeight: '800', color: 'var(--text-primary)', textTransform: 'uppercase' }}>
+                            {dn.custom_event_pickup_option || '-'}
+                          </span>
+                        </div>
                       </div>
-                      <div style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: '600', display: 'flex', alignItems: 'center' }}>
-                        Detail
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                        {(() => {
+                          const elapsed = getTimeElapsedProps(dn.postingDate, dn.postingTime);
+                          if (!elapsed) return null;
+                          return (
+                            <div style={{ fontSize: '13px', color: elapsed.color, fontWeight: elapsed.fw, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <Clock size={12} /> {elapsed.text}
+                            </div>
+                          );
+                        })()}
+                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                          {dn.postingDate ? new Date(dn.postingDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}
+                          {dn.postingTime ? ` ${dn.postingTime.substring(0, 5)} WIB` : ''}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -615,11 +775,7 @@ const Home = () => {
         )}
       </div>
 
-      {!capabilities.canPicking && (
-        <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-          <p>Anda login sebagai role Pickup. Silakan gunakan menu di atas.</p>
-        </div>
-      )}
+
     </div>
   );
 };

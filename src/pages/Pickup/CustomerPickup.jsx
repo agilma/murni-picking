@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Barcode, AlertCircle, CheckCircle, Smartphone } from 'lucide-react';
 import { validatePickupQr, confirmPickup } from '../../services/pickupService';
+import { useAuth } from '../../context/AuthContext';
 import PickupScanner from './PickupScanner';
 import ManualPickupCode from './ManualPickupCode';
 import PickupOrderCard from './PickupOrderCard';
 
 const CustomerPickup = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [pickupState, setPickupState] = useState('idle'); // idle, scanning, manual-code, processing, order-found, invalid, expired, already-picked-up, confirm-error
   const [pickupOrder, setPickupOrder] = useState(null);
   const [confirmError, setConfirmError] = useState('');
@@ -71,15 +73,43 @@ const CustomerPickup = () => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
       {pickupState !== 'success' && (
-        <div className="header">
-          <div className="header-row">
-            <button className="icon-btn" onClick={handleBack} aria-label="Kembali">
-              <ChevronLeft size={24} />
-            </button>
-            <div style={{ flexGrow: 1 }}>
-              <h1 className="text-lg">Pickup</h1>
+        <div className="header" style={user?.roleProfile === 'Pickup' ? { display: 'flex', flexDirection: 'column', gap: '12px' } : {}}>
+          {user?.roleProfile === 'Pickup' ? (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {pickupState !== 'idle' && (
+                  <button className="icon-btn" onClick={handleBack} aria-label="Kembali" style={{ marginLeft: '-12px' }}>
+                    <ChevronLeft size={24} />
+                  </button>
+                )}
+                <h1 className="text-xl">{pickupState === 'idle' ? "Murni-Booth" : "Pickup"}</h1>
+              </div>
+              <div style={{ 
+                fontSize: '13px', 
+                color: 'var(--accent-primary)', 
+                fontWeight: '700', 
+                backgroundColor: 'rgba(59, 130, 246, 0.1)', 
+                padding: '6px 12px', 
+                borderRadius: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                border: '1px solid rgba(59, 130, 246, 0.2)'
+              }}>
+                <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--accent-primary)', animation: 'pulse 2s infinite' }}></div>
+                MODE: PICKUP
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="header-row">
+              <button className="icon-btn" onClick={handleBack} aria-label="Kembali">
+                <ChevronLeft size={24} />
+              </button>
+              <div style={{ flexGrow: 1 }}>
+                <h1 className="text-lg">Pickup</h1>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
