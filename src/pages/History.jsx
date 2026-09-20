@@ -16,7 +16,7 @@ const History = () => {
   const [offset, setOffset] = useState(0);
   const [search, setSearch] = useState('');
   const searchTimeoutRef = useRef(null);
-  const limit = 20;
+  const limit = 30;
 
   const fetchHistory = useCallback(async (isLoadMore = false, searchQuery = search) => {
     if (!user || !user.username) {
@@ -173,7 +173,7 @@ const History = () => {
           <input
             type="text"
             className="search-input"
-            placeholder="Cari nomor SO / DN..."
+            placeholder="Cari nomor SO..."
             style={{ paddingLeft: '48px', width: '100%', height: '44px', borderRadius: '12px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-elevated)' }}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -237,13 +237,14 @@ const History = () => {
                     display: 'flex',
                     flexDirection: 'column',
                     boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
-                    position: 'relative'
+                    position: 'relative',
+                    flexShrink: 0
                   }}
                 >
                   <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <div style={{ fontWeight: '800', fontSize: '20px', color: 'var(--text-primary)' }}>{item.salesOrderNo || item.against_sales_order || '-'}</div>
+                        <div style={{ fontWeight: '800', fontSize: '20px', color: 'var(--text-primary)' }}>{item.po_no || '-'}</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <div style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: '500' }}>{item.name}</div>
                           {item.custom_event_booth && (
@@ -272,7 +273,7 @@ const History = () => {
                     
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', fontSize: '14px', color: 'var(--text-primary)' }}>
-                        <User size={16} color="var(--text-muted)" style={{ marginTop: '2px', flexShrink: 0 }} />
+                        <User size={16} color="var(--text-muted)" style={{ flexShrink: 0, marginTop: '2px' }} />
                         <span style={{ fontWeight: '500', wordBreak: 'break-word' }}>{item.customer || '-'}</span>
                       </div>
                       {item.custom_picked_by && (
@@ -282,31 +283,20 @@ const History = () => {
                         </div>
                       )}
                     </div>
-                  </div>
-
-                  {item.items && item.items.length > 0 && (
-                    <div style={{ 
-                      padding: '0 16px 12px 16px', 
-                      display: 'flex', 
-                      flexDirection: 'column', 
-                      gap: '4px' 
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '14px', marginBottom: '8px' }}>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '14px' }}>
                         <div style={{ fontWeight: '600', color: 'var(--text-primary)' }}>
-                          {item.items.length} Produk
+                          {item.items?.length > 0 ? `${item.items.length} Produk` : 'Total Item'}
                         </div>
                         <div style={{ color: 'var(--text-secondary)' }}>
-                          ({item.items.reduce((total, i) => total + Number(i.qty || 0), 0)} pcs)
+                          ({item.total_qty ?? item.totalQty ?? (item.items?.reduce((total, i) => total + Number(i.qty || 0), 0) || 0)} pcs)
                         </div>
                       </div>
-                      {item.items.map((prod, i) => (
-                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                          <span style={{ color: 'var(--text-primary)', flex: 1, paddingRight: '8px' }}>{prod.item_name || prod.item_code}</span>
-                          <span style={{ fontWeight: '700', color: 'var(--text-primary)', flexShrink: 0 }}>{prod.qty}</span>
-                        </div>
-                      ))}
                     </div>
-                  )}
+                  </div>
+
+                  {/* Products summary is now inside the main block like Home.jsx */}
 
                   <div style={{ 
                     padding: '12px 16px', 
@@ -319,7 +309,7 @@ const History = () => {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                       <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Informasi Ambil Barang</span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <Store size={18} color="var(--text-muted)" />
+                        <Store size={18} color="var(--accent-primary)" />
                         <span style={{ fontSize: '16px', fontWeight: '800', color: 'var(--text-primary)', textTransform: 'uppercase' }}>
                           {item.custom_event_pickup_option || '-'}
                         </span>
@@ -336,16 +326,22 @@ const History = () => {
               );
             })}
 
-            {hasMore && (
-              <button 
-                onClick={handleLoadMore}
-                disabled={loadingMore}
-                className="btn btn-secondary"
-                style={{ marginTop: '8px', marginBottom: '24px' }}
-              >
-                {loadingMore ? 'Memuat...' : 'Load More'}
-              </button>
-            )}
+            {hasMore ? (
+              <div style={{ textAlign: 'center', padding: '12px 0 24px 0', flexShrink: 0 }}>
+                <button 
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                  className="btn btn-secondary"
+                  style={{ width: '100%', padding: '12px' }}
+                >
+                  {loadingMore ? 'Memuat...' : 'Muat Lebih Banyak'}
+                </button>
+              </div>
+            ) : historyItems.length > 0 ? (
+              <div style={{ textAlign: 'center', padding: '12px 0 24px 0', color: 'var(--text-secondary)', fontSize: '13px', flexShrink: 0 }}>
+                Semua data telah ditampilkan
+              </div>
+            ) : null}
           </>
         )}
       </div>

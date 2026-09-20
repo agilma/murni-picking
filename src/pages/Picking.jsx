@@ -101,7 +101,7 @@ const Picking = () => {
       navigate('/success', { 
         state: { 
           orderId: activeOrder.deliveryNoteNo, 
-          salesOrderNo: activeOrder.against_sales_order || activeOrder.salesOrderNo || '-',
+          salesOrderNo: activeOrder?.items?.[0]?.against_sales_order || activeOrder.against_sales_order || activeOrder.salesOrderNo || '-',
           customer: activeOrder.customer,
           booth: activeOrder.custom_event_pickup_option,
           totalItems: totalRequired,
@@ -263,7 +263,7 @@ const Picking = () => {
             PROSES PICKING
           </div>
           <h1 style={{ fontWeight: '800', fontSize: '28px', margin: 0, color: 'var(--text-primary)', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
-            {activeOrder.against_sales_order || activeOrder.salesOrderNo || '-'}
+            {activeOrder?.items?.[0]?.against_sales_order || activeOrder.against_sales_order || activeOrder.salesOrderNo || '-'}
           </h1>
           <div style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: '500', marginTop: '4px' }}>
             {activeOrder.deliveryNoteNo}

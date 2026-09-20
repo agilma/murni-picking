@@ -39,12 +39,7 @@ export const AuthProvider = ({ children }) => {
           const roleProfile = normalizeRoleProfile(roleProfileName);
           const capabilities = getCapabilities(roleProfile);
 
-          if (process.env.NODE_ENV === 'development') {
-            console.log('[Role Audit]\n' + 
-                        `ERPNext Role Profile: ${roleProfileName}\n` +
-                        `Application Role: ${roleProfile}\n` +
-                        `Capabilities:\n`, capabilities);
-          }
+
 
           setUser({ 
             username,
@@ -88,12 +83,7 @@ export const AuthProvider = ({ children }) => {
       const roleProfile = normalizeRoleProfile(roleProfileName);
       const capabilities = getCapabilities(roleProfile);
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[Role Audit]\n' + 
-                    `ERPNext Role Profile: ${roleProfileName}\n` +
-                    `Application Role: ${roleProfile}\n` +
-                    `Capabilities:\n`, capabilities);
-      }
+
 
       const userData = { 
         username: loggedInUser,

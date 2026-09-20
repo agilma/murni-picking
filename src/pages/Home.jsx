@@ -89,6 +89,10 @@ const Home = () => {
     loading, 
     dnError, 
     fetchDeliveryNotes, 
+    loadMoreAvailable,
+    loadMoreActive,
+    hasMoreAvailable,
+    hasMoreActive,
     lastPickedOrder, 
     setLastPickedOrder,
     activePickingId,
@@ -110,7 +114,7 @@ const Home = () => {
       // but fetchDeliveryNotes is also called in OrderContext's useEffect.
       // We can just fetch it with search.
       fetchDeliveryNotes(search);
-    }, 500);
+    }, 1000);
 
     return () => clearTimeout(timer);
   }, [search, fetchDeliveryNotes]);
@@ -134,6 +138,9 @@ const Home = () => {
 
     return () => clearInterval(timer);
   }, [isRefreshing, search, loadingDetail, selectedDN, fetchDeliveryNotes]);
+
+  // Window scroll listener removed because AppShell has the scrolling container (overflow-y: auto)
+  // Replaced with explicit Load More buttons at the bottom.
 
   const handleSelectDN = async (dnObject) => {
     // Show skeleton or old data while loading
@@ -167,7 +174,7 @@ const Home = () => {
 
   const filterFn = dn => 
     dn.deliveryNoteNo.toLowerCase().includes(search.toLowerCase()) ||
-    (dn.salesOrderNo && dn.salesOrderNo.toLowerCase().includes(search.toLowerCase())) ||
+    (dn.poNo && dn.poNo.toLowerCase().includes(search.toLowerCase())) ||
     (dn.customer && dn.customer.toLowerCase().includes(search.toLowerCase()));
 
   const filteredAvailableDNs = availableDNs.filter(filterFn);
@@ -407,7 +414,7 @@ const Home = () => {
             <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div>
                 <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Sales Order</div>
-                <div style={{ fontWeight: '800', fontSize: '24px', color: 'var(--text-primary)' }}>{selectedDN.salesOrderNo || '-'}</div>
+                <div style={{ fontWeight: '800', fontSize: '24px', color: 'var(--text-primary)' }}>{selectedDN.poNo || '-'}</div>
                 <div style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: '500', marginTop: '4px' }}>{selectedDN.deliveryNoteNo}</div>
               </div>
               
@@ -449,7 +456,7 @@ const Home = () => {
 
               {selectedDN.poNo && (
                 <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
-                  <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '4px' }}>PO</div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Sales Order</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '500', color: 'var(--text-primary)' }}>
                     {selectedDN.poNo}
                   </div>
@@ -576,7 +583,7 @@ const Home = () => {
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <div style={{ fontWeight: '800', fontSize: '20px', color: 'var(--text-primary)' }}>{dn.salesOrderNo || '-'}</div>
+                        <div style={{ fontWeight: '800', fontSize: '20px', color: 'var(--text-primary)' }}>{dn.poNo || '-'}</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <div style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: '500' }}>{dn.deliveryNoteNo}</div>
                           {dn.custom_event_booth && (
@@ -624,10 +631,10 @@ const Home = () => {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '14px' }}>
                         <div style={{ fontWeight: '600', color: 'var(--text-primary)' }}>
-                          {dn.items?.length || 0} Produk
+                          {dn.items?.length > 0 ? `${dn.items.length} Produk` : 'Total Item'}
                         </div>
                         <div style={{ color: 'var(--text-secondary)' }}>
-                          ({dn.items?.reduce((total, item) => total + Number(item.qty || 0), 0) || 0} pcs)
+                          ({dn.totalQty ?? (dn.items?.reduce((total, item) => total + Number(item.qty || 0), 0) || 0)} pcs)
                         </div>
                       </div>
                     </div>
@@ -679,7 +686,7 @@ const Home = () => {
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <div style={{ fontWeight: '800', fontSize: '20px', color: 'var(--text-primary)' }}>{dn.salesOrderNo || '-'}</div>
+                        <div style={{ fontWeight: '800', fontSize: '20px', color: 'var(--text-primary)' }}>{dn.poNo || '-'}</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <div style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: '500' }}>{dn.deliveryNoteNo}</div>
                           {dn.custom_event_booth && (
@@ -716,10 +723,10 @@ const Home = () => {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '14px' }}>
                         <div style={{ fontWeight: '600', color: 'var(--text-primary)' }}>
-                          {dn.items?.length || 0} Produk
+                          {dn.items?.length > 0 ? `${dn.items.length} Produk` : 'Total Item'}
                         </div>
                         <div style={{ color: 'var(--text-secondary)' }}>
-                          ({dn.items?.reduce((total, item) => total + Number(item.qty || 0), 0) || 0} pcs)
+                          ({dn.totalQty ?? (dn.items?.reduce((total, item) => total + Number(item.qty || 0), 0) || 0)} pcs)
                         </div>
                       </div>
                     </div>
@@ -765,8 +772,36 @@ const Home = () => {
                 {((activeTab === 'active' && filteredActiveDNs.length === 0) || (activeTab === 'available' && filteredAvailableDNs.length === 0)) && (
                   <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '40px' }}>
                     <Package size={48} style={{ margin: '0 auto 16px', opacity: 0.5 }} />
-                    <p>Tidak ada Delivery Note siap picking</p>
+                    <p>{search ? 'Sales Order tidak ditemukan' : 'Tidak ada Delivery Note siap picking'}</p>
                     {search && <p style={{ fontSize: '13px', marginTop: '8px' }}>Coba ubah kata kunci pencarian</p>}
+                  </div>
+                )}
+                
+                {((activeTab === 'available' && hasMoreAvailable) || (activeTab === 'active' && hasMoreActive)) && !loading && (
+                  <div style={{ textAlign: 'center', padding: '20px' }}>
+                    <button 
+                      className="btn btn-secondary" 
+                      style={{ width: '100%', padding: '12px' }}
+                      onClick={() => {
+                        if (activeTab === 'available') loadMoreAvailable(search);
+                        else loadMoreActive(search);
+                      }}
+                    >
+                      Muat Lebih Banyak
+                    </button>
+                  </div>
+                )}
+
+                {((activeTab === 'available' && !hasMoreAvailable && filteredAvailableDNs.length > 0) || 
+                  (activeTab === 'active' && !hasMoreActive && filteredActiveDNs.length > 0)) && !loading && (
+                  <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-secondary)', fontSize: '13px' }}>
+                    Semua data telah ditampilkan
+                  </div>
+                )}
+                
+                {loading && !selectedDN && (
+                  <div style={{ display: 'flex', justifyContent: 'center', padding: '20px' }}>
+                    <div style={{ width: '30px', height: '30px', borderRadius: '50%', border: '3px solid var(--border-color)', borderTopColor: 'var(--accent-primary)', animation: 'spin 1s linear infinite' }} />
                   </div>
                 )}
               </>

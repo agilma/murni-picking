@@ -9,8 +9,7 @@ const LOGIN_ENDPOINT = import.meta.env.VITE_API_LOGIN_ENDPOINT || '/api/method/t
  */
 export const checkSession = async () => {
   try {
-    // Hit an endpoint that requires authentication to verify cookie works
-    await apiClient.get('/api/method/frappe.client.get_list?doctype=Delivery Note&limit_page_length=1');
+    // Session API check removed as per user request to avoid API query spam
     
     // Retrieve username from localStorage if available, otherwise fallback
     const stored = localStorage.getItem('murni_user_session');

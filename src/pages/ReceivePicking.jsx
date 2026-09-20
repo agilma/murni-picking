@@ -2,9 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, QrCode, Search, CheckCircle, User, UserCheck, Store, Trash2, AlertCircle } from 'lucide-react';
 import { useOrders } from '../context/OrderContext';
-import { getDeliveryNoteWithItems } from '../api/picking';
-import { submitDeliveryNote, submitFrappeDeliveryNote, findDeliveryNotesBySalesOrder, submitDeliveryNotesBatch } from '../api/deliveryNote';
-import { getSalesOrderByName } from '../api/salesOrder';
+import { fetchReadyToReceiveDeliveryNotes } from '../api/picking';
+import { submitDeliveryNote, submitDeliveryNotesBatch } from '../api/deliveryNote';
 import { useAuth } from '../context/AuthContext';
 
 const parseServerMessages = (serverMessages) => {
@@ -85,45 +84,13 @@ const ReceivePicking = ({ isHome = false }) => {
     
     try {
       const searchVal = pickupCode.trim();
-      let soName = null;
       let authorizedCandidates = [];
-      let foundAnyDn = false;
-      let foundUnpicked = false;
-      let foundNotDraft = false;
       
-      const so = await getSalesOrderByName(searchVal);
+      const dns = await fetchReadyToReceiveDeliveryNotes(searchVal, user?.roleProfile === 'Pickup' ? 'anyone' : user?.username);
       
-      if (so) {
-        soName = so.name;
-        const dns = await findDeliveryNotesBySalesOrder(so.name);
-        if (dns && dns.length > 0) foundAnyDn = true;
-        
-        const candidates = dns.filter(dn => {
-          const isDraft = (dn.docstatus === 0 || dn.status === 'Draft');
-          const isPicked = (dn.custom_event_is_picked === 1);
-          if (!isDraft) foundNotDraft = true;
-          if (!isPicked) foundUnpicked = true;
-          return isDraft && isPicked;
-        });
-        
-        authorizedCandidates = candidates;
-      }
-      
-      if (authorizedCandidates.length === 0) {
-        // Fallback: search as Delivery Note ID directly
-        const detail = await getDeliveryNoteWithItems(searchVal);
-        if (detail) {
-          foundAnyDn = true;
-          const isDraft = (detail.docstatus === 0 || detail.status === 'Draft');
-          const isPicked = (detail.custom_event_is_picked === 1);
-          
-          if (!isDraft) foundNotDraft = true;
-          if (!isPicked) foundUnpicked = true;
-          
-          if (isDraft && isPicked) {
-            authorizedCandidates.push(detail);
-          }
-        }
+      if (dns && dns.length > 0) {
+        // Filter out non-draft ones just in case
+        authorizedCandidates = dns.filter(dn => dn.docstatus === 0 || dn.status === 'Draft');
       }
       
       if (authorizedCandidates.length > 0) {
@@ -188,19 +155,11 @@ const ReceivePicking = ({ isHome = false }) => {
           return newCandidates;
         });
         setPickupCode('');
-      } else if (foundAnyDn) {
-        if (foundUnpicked) {
-            setError('Barang belum selesai dipicking oleh tim Picking.');
-        } else if (foundNotDraft) {
+      } else {
+        if (dns && dns.length > 0) {
             setError('Delivery Note sudah diterima atau status tidak valid.');
         } else {
-            setError('Delivery Note ini tidak dapat diterima oleh role Anda.');
-        }
-      } else {
-        if (soName) {
-            setError('Delivery Note untuk nomor sales order ini belum ditemukan.');
-        } else {
-            setError('Delivery Note tidak ditemukan.');
+            setError('Sales Order tidak ditemukan.');
         }
       }
     } catch (err) {
@@ -572,9 +531,9 @@ const ReceivePicking = ({ isHome = false }) => {
             </div>
             
             {candidateDns.map(dn => {
-              const totalItems = dn.items ? dn.items.reduce((sum, item) => sum + item.qty, 0) : 0;
+              const totalItems = dn.total_qty || (dn.items ? dn.items.reduce((sum, item) => sum + item.qty, 0) : 0);
               const customerName = dn.customer || dn.customer_name || '-';
-              const soNumber = dn.against_sales_order || dn.sales_order || '-';
+              const soNumber = dn.po_no || '-';
               const pickupOption = dn.custom_event_pickup_option || '-';
               const pickedBy = dn.custom_picked_by || dn.pickedBy || null;
               
@@ -614,7 +573,7 @@ const ReceivePicking = ({ isHome = false }) => {
                   <div style={{ display: 'flex', gap: '16px', fontSize: '14px', color: 'var(--text-secondary)', marginTop: '4px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <div style={{ fontWeight: '600', color: 'var(--text-primary)' }}>
-                        {dn.items?.length || 0} Produk
+                        {dn.items?.length > 0 ? `${dn.items.length} Produk` : 'Total Item'}
                       </div>
                       <div style={{ color: 'var(--text-secondary)' }}>
                         ({totalItems} pcs)

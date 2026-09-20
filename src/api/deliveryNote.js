@@ -6,17 +6,24 @@ import { apiClient } from './client';
  * @param {number} page - Page number
  * @param {number} limit - Items per page
  */
-export const getDeliveryNotes = async (salesOrder = '', page = 1, limit = 20) => {
-  const endpoint = import.meta.env.VITE_API_SALES_ORDER_ENDPOINT;
-  if (!endpoint) {
-    throw new Error('Missing VITE_API_SALES_ORDER_ENDPOINT in environment variables');
+export const getDeliveryNotes = async (salesOrder = '', page = 1, limit = 20, boothName = '') => {
+  const endpoint = import.meta.env.VITE_API_DELIVERY_NOTES_CL_ENDPOINT || '/api/method/thunder_erp.api.dn_picker.get_delivery_note_cl';
+
+  const params = {
+    custom_event_is_picked: 0,
+    page,
+    length: limit
+  };
+
+  if (boothName) {
+    params.custom_event_booth = boothName;
   }
 
-  const response = await apiClient.get(endpoint, {
-    sales_order: salesOrder,
-    page,
-    limit
-  });
+  if (salesOrder) {
+    params.sales_order = salesOrder;
+  }
+
+  const response = await apiClient.get(endpoint, params);
   
   return response.message || [];
 };
@@ -52,7 +59,7 @@ export const buildDeliveryNoteSubmitPayload = ({ deliveryNoteNo, items, pickedBy
     payload.custom_picked_by = pickedBy;
   }
   
-  console.log('Submit Picking payload:', payload);
+
   
   return payload;
 };

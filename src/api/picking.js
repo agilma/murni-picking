@@ -5,12 +5,12 @@ import { isFrappeChecked } from '../utils/frappeUtils';
  * Fetch active/available Delivery Notes for picking.
  */
 export const fetchDeliveryNotes = async (searchQuery = '', page = 1, limit = 20, eventBooth = null) => {
-  const endpoint = '/api/method/thunder_erp.api.dn_picker.get_delivery_note';
+  const endpoint = '/api/method/thunder_erp.api.dn_picker.get_delivery_note_cl';
   
   const params = {
-    include_items: 1,
     custom_event_is_picked: 0,
-    custom_picked_by: '["is","not set"]'
+    page: page,
+    limit: limit
   };
   
   if (eventBooth && eventBooth.length > 0) {
@@ -18,12 +18,12 @@ export const fetchDeliveryNotes = async (searchQuery = '', page = 1, limit = 20,
     params.custom_event_booth = boothStr;
   }
   if (searchQuery) {
-    params.sales_order = searchQuery;
+    params.po_no = searchQuery;
   }
   
   const response = await apiClient.get(endpoint, params);
   
-  console.log('[HOME] dn_picker available response', response);
+
   
   const list = response?.message;
   
@@ -40,12 +40,13 @@ export const fetchDeliveryNotes = async (searchQuery = '', page = 1, limit = 20,
 };
 
 export const fetchActiveDeliveryNotes = async (searchQuery = '', page = 1, limit = 20, eventBooth = null, currentUser = null) => {
-  const endpoint = '/api/method/thunder_erp.api.dn_picker.get_delivery_note';
+  const endpoint = '/api/method/thunder_erp.api.dn_picker.get_delivery_note_cl';
   
   const params = {
-    include_items: 1,
     custom_event_is_picked: 0,
-    custom_picked_by: currentUser || '["is","set"]'
+    custom_picked_by: currentUser || '["is","set"]',
+    page: page,
+    limit: limit
   };
   
   if (eventBooth && eventBooth.length > 0) {
@@ -53,12 +54,12 @@ export const fetchActiveDeliveryNotes = async (searchQuery = '', page = 1, limit
     params.custom_event_booth = boothStr;
   }
   if (searchQuery) {
-    params.sales_order = searchQuery;
+    params.po_no = searchQuery;
   }
   
   const response = await apiClient.get(endpoint, params);
   
-  console.log('[HOME] dn_picker active response', response);
+
   
   const list = response?.message;
   
@@ -74,13 +75,15 @@ export const fetchActiveDeliveryNotes = async (searchQuery = '', page = 1, limit
   return list;
 };
 
-export const fetchHistoryDeliveryNotes = async (searchQuery = '', page = 1, limit = 20, eventBooth = null, currentUser = null) => {
-  const endpoint = '/api/method/thunder_erp.api.dn_picker.get_delivery_note';
+export const fetchHistoryDeliveryNotes = async (searchQuery = '', page = 1, limit = 30, eventBooth = null, currentUser = null) => {
+  const endpoint = '/api/method/thunder_erp.api.dn_picker.get_delivery_note_cl';
   
   const params = {
-    include_items: 1,
+    custom_event_is_picked: 1,
     docstatus: 1,
-    custom_picked_by: currentUser
+    custom_picked_by: currentUser,
+    page: page,
+    limit: limit
   };
   
   if (eventBooth && eventBooth.length > 0) {
@@ -88,12 +91,12 @@ export const fetchHistoryDeliveryNotes = async (searchQuery = '', page = 1, limi
     params.custom_event_booth = boothStr;
   }
   if (searchQuery) {
-    params.sales_order = searchQuery;
+    params.po_no = searchQuery;
   }
   
   const response = await apiClient.get(endpoint, params);
   
-  console.log('[HISTORY] dn_picker history response', response);
+
   
   const list = response?.message;
   
@@ -110,34 +113,44 @@ export const fetchHistoryDeliveryNotes = async (searchQuery = '', page = 1, limi
 };
 
 
+/**
+ * Fetch active/available Delivery Notes for picking.
+ */
+export const fetchReadyToReceiveDeliveryNotes = async (searchQuery = '', currentUser = null) => {
+  const endpoint = '/api/method/thunder_erp.api.dn_picker.get_delivery_note_cl';
+  
+  const params = {
+    custom_event_is_picked: 1,
+    custom_picked_by: currentUser || '["is","set"]'
+  };
+  
+  if (searchQuery) {
+    params.po_no = searchQuery;
+  }
+  
+  const response = await apiClient.get(endpoint, params);
+  const list = response?.message;
+  
+  if (!list || !Array.isArray(list)) {
+    return [];
+  }
+  
+  return list;
+};
 
 /**
  * Fetch full Delivery Note detail (parent + items) using custom API
  * as the source of truth for Picking UI.
  */
 export const getDeliveryNoteWithItems = async (dnName) => {
-  // Directly use the required custom backend API for detail Picking
-  const endpoint = '/api/method/thunder_erp.api.dn_picker.get_delivery_note';
+  const resourceBase = import.meta.env.VITE_API_DELIVERY_NOTE_RESOURCE || '/api/resource/Delivery Note';
+  const endpoint = `${resourceBase}/${encodeURIComponent(dnName)}`;
   
-  const response = await apiClient.get(endpoint, {
-    dn_name: dnName,
-    include_items: 1
-  });
+  const response = await apiClient.get(endpoint);
   
-  console.log('[PICKING] dn_picker raw response', response);
-  console.log('[PICKING] dn_picker message', response?.message);
-  console.log('[PICKING] requested DN', dnName);
+
   
-  const list = response?.message;
-  
-  if (!Array.isArray(list)) {
-    console.error('[PICKING] Invalid delivery note response format (not an array)', list);
-    throw new Error('Invalid delivery note response');
-  }
-  
-  const detail = list.find((dn) => dn.name === dnName);
-  console.log('[PICKING] matched DN', detail);
-  console.log('[PICKING] matched items', detail?.items);
+  const detail = response?.data;
   
   if (!detail) {
     throw new Error(`Delivery Note ${dnName} not found in response`);
@@ -145,7 +158,6 @@ export const getDeliveryNoteWithItems = async (dnName) => {
   
   const normalizedItems = (detail.items || []).map(normalizeDeliveryNoteItem);
   
-  // Custom APIs usually return data in 'message' wrapper
   return {
     ...detail,
     items: normalizedItems
@@ -169,6 +181,7 @@ const normalizeDeliveryNoteItem = (item) => {
     barcode: item.barcode ?? null,
     qty: Number(item.qty ?? 0),
     warehouse: item.warehouse ?? '',
+    against_sales_order: item.against_sales_order ?? null,
     isPicked: isFrappeChecked(item.is_picked)
   };
 };
@@ -185,10 +198,7 @@ export const claimDeliveryNote = async (deliveryNoteNo, currentUser) => {
   if (!deliveryNoteNo) throw new Error('Delivery Note name is required');
   if (!currentUser) throw new Error('Current user is required');
 
-  console.log('[PICKING] Claim request', {
-    dnName: deliveryNoteNo,
-    currentUser: currentUser,
-  });
+
 
   const resourceBase = import.meta.env.VITE_API_DELIVERY_NOTE_RESOURCE || '/api/resource/Delivery%20Note';
   const endpoint = `${resourceBase}/${encodeURIComponent(deliveryNoteNo)}`;
@@ -197,7 +207,7 @@ export const claimDeliveryNote = async (deliveryNoteNo, currentUser) => {
     custom_picked_by: currentUser
   });
   
-  console.log('[PICKING] Claim response', response);
+
   
   return response;
 };
@@ -214,12 +224,7 @@ export const claimDeliveryNote = async (deliveryNoteNo, currentUser) => {
  * @param {string} itemRowName - The unique name (ID) of the Delivery Note Item child row
  */
 export const updateDeliveryNoteItemPicked = async (deliveryNoteNo, itemRowName) => {
-  console.log('[PICKING] Item update:', {
-    dnName: deliveryNoteNo,
-    itemRowName,
-    fieldname: 'is_picked',
-    value: 1,
-  });
+
   const endpoint = '/api/method/frappe.client.set_value';
   const response = await apiClient.post(endpoint, {
     doctype: 'Delivery Note Item',
@@ -240,10 +245,7 @@ export const updateDeliveryNoteItemPicked = async (deliveryNoteNo, itemRowName) 
  * @param {string} deliveryNoteNo - The Delivery Note number
  */
 export const completeDeliveryNotePicking = async (deliveryNoteNo) => {
-  console.log('[PICKING] Complete request:', {
-    dnName: deliveryNoteNo,
-    custom_event_is_picked: 1
-  });
+
   
   const resourceBase = import.meta.env.VITE_API_DELIVERY_NOTE_RESOURCE || '/api/resource/Delivery%20Note';
   const endpoint = `${resourceBase}/${encodeURIComponent(deliveryNoteNo)}`;

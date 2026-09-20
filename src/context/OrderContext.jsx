@@ -22,6 +22,10 @@ export const OrderProvider = ({ children }) => {
   const [orders, setOrders] = useState([]); // Pending SOs
   const [deliveryNotes, setDeliveryNotes] = useState([]); // DNs available
   const [activeDeliveryNotes, setActiveDeliveryNotes] = useState([]); // DNs active
+  const [availablePage, setAvailablePage] = useState(1);
+  const [activePage, setActivePage] = useState(1);
+  const [hasMoreAvailable, setHasMoreAvailable] = useState(true);
+  const [hasMoreActive, setHasMoreActive] = useState(true);
   const [activeOrder, setActiveOrder] = useState(null); // Selected DN for picking
   const [loading, setLoading] = useState(false);
   const [ordersError, setOrdersError] = useState(null);
@@ -53,8 +57,7 @@ export const OrderProvider = ({ children }) => {
 
   useEffect(() => {
     if (user) {
-      console.log('[AUTH] Current user:', user);
-      console.log('[AUTH] User identifier:', getCurrentUserIdentifier());
+
     }
   }, [user]);
 
@@ -86,8 +89,8 @@ export const OrderProvider = ({ children }) => {
     setDnError(null);
     try {
       const [availableData, activeData] = await Promise.all([
-        apiFetchDeliveryNotes(searchQuery, 1, 100, user?.eventBooth),
-        apiFetchActiveDeliveryNotes(searchQuery, 1, 100, user?.eventBooth, getCurrentUserIdentifier())
+        apiFetchDeliveryNotes(searchQuery, 1, 30, user?.eventBooth),
+        apiFetchActiveDeliveryNotes(searchQuery, 1, 30, user?.eventBooth, user?.roleProfile === 'Pickup' ? 'anyone' : getCurrentUserIdentifier())
       ]);  
 
       const mapDNs = (data) => data.map(item => ({
@@ -100,7 +103,7 @@ export const OrderProvider = ({ children }) => {
         isPicked: isFrappeChecked(item.custom_event_is_picked),
         pickedBy: item.custom_picked_by,
         pickupCode: item.pickup_code,
-        salesOrderNo: item.against_sales_order,
+        poNo: item.po_no,
         custom_event_pickup_option: item.custom_event_pickup_option,
         custom_event_booth: item.custom_event_booth,
         items: (item.items || []).map(i => ({
@@ -108,10 +111,18 @@ export const OrderProvider = ({ children }) => {
           itemCode: i.item_code ?? '',
           itemName: i.item_name ?? '',
           qty: Number(i.qty ?? 0),
-          warehouse: i.warehouse ?? '',
-          isPicked: isFrappeChecked(i.is_picked)
-        }))
+          actualQty: Number(i.actual_qty ?? 0),
+          pickedQty: Number(i.custom_picked_qty ?? 0)
+        })),
+        totalItems: item.total_qty || (item.items || []).length,
+        totalQty: item.total_qty || 0
       }));
+
+      // reset page states
+      setAvailablePage(1);
+      setActivePage(1);
+      setHasMoreAvailable(availableData && availableData.length === 30);
+      setHasMoreActive(activeData && activeData.length === 30);
 
       if (availableData) {
         setDeliveryNotes(mapDNs(availableData));
@@ -129,9 +140,93 @@ export const OrderProvider = ({ children }) => {
     }
   }, [user?.eventBooth]);
 
+  const loadMoreAvailable = async (searchQuery = '') => {
+    if (!hasMoreAvailable || loading) return;
+    const nextPage = availablePage + 1;
+    setLoading(true);
+    try {
+      const data = await apiFetchDeliveryNotes(searchQuery, nextPage, 30, user?.eventBooth);
+      setHasMoreAvailable(data.length === 30);
+      setAvailablePage(nextPage);
+      if (data && data.length > 0) {
+        const mapDNs = (items) => items.map(item => ({
+          deliveryNoteNo: item.name,
+          customer: item.customer,
+          postingDate: item.posting_date,
+          postingTime: item.posting_time,
+          status: item.status,
+          docstatus: item.status === 'Draft' ? 0 : 1,
+          isPicked: isFrappeChecked(item.custom_event_is_picked),
+          pickedBy: item.custom_picked_by,
+          pickupCode: item.pickup_code,
+          poNo: item.po_no,
+          custom_event_pickup_option: item.custom_event_pickup_option,
+          custom_event_booth: item.custom_event_booth,
+          items: (item.items || []).map(i => ({
+            name: i.name ?? null,
+            itemCode: i.item_code ?? '',
+            itemName: i.item_name ?? '',
+            qty: Number(i.qty ?? 0),
+            actualQty: Number(i.actual_qty ?? 0),
+            pickedQty: Number(i.custom_picked_qty ?? 0)
+          })),
+          totalItems: item.total_qty || (item.items || []).length,
+          totalQty: item.total_qty || 0
+        }));
+        setDeliveryNotes(prev => [...prev, ...mapDNs(data)]);
+      }
+    } catch (err) {
+      console.error('Failed to load more available DNs:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadMoreActive = async (searchQuery = '') => {
+    if (!hasMoreActive || loading) return;
+    const nextPage = activePage + 1;
+    setLoading(true);
+    try {
+      const data = await apiFetchActiveDeliveryNotes(searchQuery, nextPage, 30, user?.eventBooth, user?.roleProfile === 'Pickup' ? 'anyone' : getCurrentUserIdentifier());
+      setHasMoreActive(data.length === 30);
+      setActivePage(nextPage);
+      if (data && data.length > 0) {
+        const mapDNs = (items) => items.map(item => ({
+          deliveryNoteNo: item.name,
+          customer: item.customer,
+          postingDate: item.posting_date,
+          postingTime: item.posting_time,
+          status: item.status,
+          docstatus: item.status === 'Draft' ? 0 : 1,
+          isPicked: isFrappeChecked(item.custom_event_is_picked),
+          pickedBy: item.custom_picked_by,
+          pickupCode: item.pickup_code,
+          poNo: item.po_no,
+          custom_event_pickup_option: item.custom_event_pickup_option,
+          custom_event_booth: item.custom_event_booth,
+          items: (item.items || []).map(i => ({
+            name: i.name ?? null,
+            itemCode: i.item_code ?? '',
+            itemName: i.item_name ?? '',
+            qty: Number(i.qty ?? 0),
+            actualQty: Number(i.actual_qty ?? 0),
+            pickedQty: Number(i.custom_picked_qty ?? 0)
+          })),
+          totalItems: item.total_qty || (item.items || []).length,
+          totalQty: item.total_qty || 0
+        }));
+        setActiveDeliveryNotes(prev => [...prev, ...mapDNs(data)]);
+      }
+    } catch (err) {
+      console.error('Failed to load more active DNs:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (isAuthenticated) {
-      fetchOrders();
+      // fetchOrders(); // Removed to prevent spam query API on home
       fetchDeliveryNotes();
     } else {
       setOrders([]);
@@ -164,9 +259,7 @@ export const OrderProvider = ({ children }) => {
   // Load details without claiming (when card is clicked)
   const loadDeliveryNoteDetail = async (dnName) => {
     try {
-      console.log('[PICKING] Loading Delivery Note detail', dnName);
-      const dnDetail = await getDeliveryNoteWithItems(dnName);
-      console.log('[PICKING] Delivery Note detail loaded', dnDetail);
+
       
       return {
         docstatus: dnDetail?.docstatus,
@@ -203,15 +296,26 @@ export const OrderProvider = ({ children }) => {
       // If already claimed by current user, skip the API call
       if (dnObject.pickedBy !== currentUser) {
         const response = await claimDeliveryNote(dnObject.deliveryNoteNo, currentUser);
-        console.log('[PICKING] Claim response', response);
-      } else {
-        console.log('[PICKING] DN already claimed by current user, skipping API call');
+      }
+
+      // Fetch the full detail to ensure we have all item properties like barcodes
+
+      let fullDetail = null;
+      try {
+        fullDetail = await getDeliveryNoteWithItems(dnObject.deliveryNoteNo);
+      } catch (err) {
+        console.error('Failed to fetch full detail for picking', err);
+        showToast('Gagal memuat detail data barang untuk picking.', 'error');
+        setActiveOrderError('Gagal memuat detail barang.');
+        setLoading(false);
+        return false;
       }
 
       setActiveOrder({
         ...dnObject,
+        ...fullDetail,
         pickedBy: currentUser,
-        items: (dnObject.items || []).map(i => ({
+        items: (fullDetail?.items || dnObject.items || []).map(i => ({
           ...i,
           pickedQty: 0,
           isPicked: false
@@ -265,13 +369,7 @@ export const OrderProvider = ({ children }) => {
         return false; // Network or API error, do NOT clear localStorage
       }
       
-      console.log('[Resume Picking]', {
-        dnName,
-        currentUser,
-        foundDn: dnDetail?.name,
-        pickedBy: dnDetail?.custom_picked_by,
-        isPicked: dnDetail?.custom_event_is_picked
-      });
+
 
       if (!dnDetail) {
         localStorage.removeItem('murni_active_picking');
@@ -455,7 +553,7 @@ export const OrderProvider = ({ children }) => {
       localStorage.setItem('lastPickedOrder', JSON.stringify(newLastPicked));
       
       showToast('Picking selesai.', 'success');
-      fetchDeliveryNotes(); // Refresh list
+      // fetchDeliveryNotes(); // Dihapus untuk mencegah double fetch karena Home.jsx akan otomatis memanggil ini
       return newLastPicked;
     } catch {
       showToast('Data picking belum berhasil diselesaikan di server. Silakan coba lagi.', 'error');
@@ -487,6 +585,10 @@ export const OrderProvider = ({ children }) => {
       completeOrder,
       fetchOrders,
       fetchDeliveryNotes,
+      loadMoreAvailable,
+      loadMoreActive,
+      hasMoreAvailable,
+      hasMoreActive,
       toast,
       showToast,
       lastPickedOrder,
