@@ -1,8 +1,7 @@
 {
-  "name": "murni-booth",
-  "description": "Murni Booth Operational Application",
-  "version": "1.0.1",
+  "name": "tmp-app",
   "private": true,
+  "version": "1.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
