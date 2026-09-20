@@ -19,6 +19,7 @@ export const AuthProvider = ({ children }) => {
           
           let roleProfileName = 'Unknown';
           let eventBooth = null;
+          let full_name = null;
 
           // Restore role_profile_name and event_booth from localStorage if available
           const storedUserStr = localStorage.getItem('murni_user_session');
@@ -28,6 +29,7 @@ export const AuthProvider = ({ children }) => {
               if (storedUser && storedUser.username === username) {
                 roleProfileName = storedUser.roleProfileName || 'Unknown';
                 eventBooth = storedUser.eventBooth || null;
+                full_name = storedUser.full_name || null;
               }
             } catch (e) {
               console.error('Failed to parse stored user session');
@@ -46,6 +48,8 @@ export const AuthProvider = ({ children }) => {
 
           setUser({ 
             username,
+            full_name,
+            roleProfileName,
             roleProfile,
             capabilities,
             eventBooth
@@ -93,6 +97,7 @@ export const AuthProvider = ({ children }) => {
 
       const userData = { 
         username: loggedInUser,
+        full_name: response.full_name,
         roleProfileName,
         roleProfile,
         capabilities,

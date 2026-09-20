@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Barcode, AlertCircle, CheckCircle, Smartphone } from 'lucide-react';
+import { ChevronLeft, Barcode, AlertCircle, CheckCircle, Smartphone, Clock } from 'lucide-react';
 import { validatePickupQr, confirmPickup } from '../../services/pickupService';
 import { useAuth } from '../../context/AuthContext';
 import PickupScanner from './PickupScanner';
@@ -33,6 +33,18 @@ const CustomerPickup = () => {
     try {
       const result = await validatePickupQr(code);
       if (result.status === 'success') {
+        const option = result.order?.custom_event_pickup_option || '';
+        
+        // Validation for Pickup role
+        if (user?.roleProfile === 'Pickup') {
+          const allowedOptions = ["Pickup Station", "Station Pickup", "Pickup Store", "Station_Pickup"];
+          if (!allowedOptions.includes(option)) {
+            setPickupOrder(result.order);
+            setPickupState('wrong-booth');
+            return;
+          }
+        }
+
         setPickupOrder(result.order);
         setPickupState('order-found');
       } else {
@@ -58,7 +70,17 @@ const CustomerPickup = () => {
     setIsConfirming(true);
     const response = await confirmPickup(pickupOrder.salesInvoiceName);
     if (response.success) {
-      navigate('/success', { state: { orderId: pickupOrder.orderId, type: 'DINE_IN' } });
+      navigate('/success', { 
+        state: { 
+          orderId: pickupOrder.salesInvoiceName || '-', 
+          salesOrderNo: pickupOrder.salesOrderName || pickupOrder.orderId,
+          customer: pickupOrder.customerName,
+          booth: pickupOrder.custom_event_pickup_option,
+          totalItems: pickupOrder.totalQty,
+          customPickUpCode: pickupOrder.pickupCode,
+          type: 'DINE_IN' 
+        } 
+      });
     } else {
       setIsConfirming(false);
       if (response.status === 'already-picked-up') {
@@ -73,43 +95,28 @@ const CustomerPickup = () => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
       {pickupState !== 'success' && (
-        <div className="header" style={user?.roleProfile === 'Pickup' ? { display: 'flex', flexDirection: 'column', gap: '12px' } : {}}>
-          {user?.roleProfile === 'Pickup' ? (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {pickupState !== 'idle' && (
-                  <button className="icon-btn" onClick={handleBack} aria-label="Kembali" style={{ marginLeft: '-12px' }}>
-                    <ChevronLeft size={24} />
-                  </button>
-                )}
-                <h1 className="text-xl">{pickupState === 'idle' ? "Murni-Booth" : "Pickup"}</h1>
-              </div>
-              <div style={{ 
-                fontSize: '13px', 
-                color: 'var(--accent-primary)', 
-                fontWeight: '700', 
-                backgroundColor: 'rgba(59, 130, 246, 0.1)', 
-                padding: '6px 12px', 
-                borderRadius: '16px',
+        <div className="header">
+          <div className="header-row">
+            <button className="icon-btn" onClick={handleBack} aria-label="Kembali">
+              <ChevronLeft size={24} />
+            </button>
+            <div style={{ flexGrow: 1 }}>
+              <h1 className="text-lg">Pickup</h1>
+            </div>
+            <button 
+              className="icon-btn" 
+              onClick={() => navigate('/pickup-history')} 
+              aria-label="History"
+              style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
-                border: '1px solid rgba(59, 130, 246, 0.2)'
-              }}>
-                <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--accent-primary)', animation: 'pulse 2s infinite' }}></div>
-                MODE: PICKUP
-              </div>
-            </div>
-          ) : (
-            <div className="header-row">
-              <button className="icon-btn" onClick={handleBack} aria-label="Kembali">
-                <ChevronLeft size={24} />
-              </button>
-              <div style={{ flexGrow: 1 }}>
-                <h1 className="text-lg">Pickup</h1>
-              </div>
-            </div>
-          )}
+                justifyContent: 'center',
+                color: 'var(--text-secondary)'
+              }}
+            >
+              <Clock size={24} />
+            </button>
+          </div>
         </div>
       )}
 
@@ -214,9 +221,17 @@ const CustomerPickup = () => {
               <h2 className="text-lg mb-2">Barcode Tidak Valid</h2>
               <p className="text-secondary">Barcode ini tidak dapat digunakan<br/>untuk pickup.</p>
             </div>
-            <button className="btn btn-primary" onClick={() => setPickupState('scanning')} style={{ width: '100%', maxWidth: '320px' }}>
-              Scan Lagi
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', maxWidth: '320px' }}>
+              <button className="btn btn-primary" onClick={() => setPickupState('scanning')}>
+                Scan Lagi
+              </button>
+              <button className="btn btn-secondary" onClick={() => setPickupState('manual-code')}>
+                Masukkan Kode Manual
+              </button>
+              <button className="btn btn-secondary" onClick={() => setPickupState('idle')} style={{ border: 'none', backgroundColor: 'transparent' }}>
+                Kembali
+              </button>
+            </div>
           </div>
         )}
 
@@ -228,9 +243,17 @@ const CustomerPickup = () => {
               <h2 className="text-lg mb-2">Pesanan Belum Siap</h2>
               <p className="text-secondary">Pesanan belum siap diambil.<br/>Silakan tunggu proses penerimaan selesai.</p>
             </div>
-            <button className="btn btn-primary" onClick={() => setPickupState('scanning')} style={{ width: '100%', maxWidth: '320px' }}>
-              Scan Lagi
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', maxWidth: '320px' }}>
+              <button className="btn btn-primary" onClick={() => setPickupState('scanning')}>
+                Scan Lagi
+              </button>
+              <button className="btn btn-secondary" onClick={() => setPickupState('manual-code')}>
+                Masukkan Kode Manual
+              </button>
+              <button className="btn btn-secondary" onClick={() => setPickupState('idle')} style={{ border: 'none', backgroundColor: 'transparent' }}>
+                Kembali
+              </button>
+            </div>
           </div>
         )}
 
@@ -242,9 +265,17 @@ const CustomerPickup = () => {
               <h2 className="text-lg mb-2">Barcode Kedaluwarsa</h2>
               <p className="text-secondary">Barcode pickup ini sudah tidak<br/>dapat digunakan.<br/><br/>Silakan gunakan Barcode terbaru.</p>
             </div>
-            <button className="btn btn-primary" onClick={() => setPickupState('scanning')} style={{ width: '100%', maxWidth: '320px' }}>
-              Scan Lagi
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', maxWidth: '320px' }}>
+              <button className="btn btn-primary" onClick={() => setPickupState('scanning')}>
+                Scan Lagi
+              </button>
+              <button className="btn btn-secondary" onClick={() => setPickupState('manual-code')}>
+                Masukkan Kode Manual
+              </button>
+              <button className="btn btn-secondary" onClick={() => setPickupState('idle')} style={{ border: 'none', backgroundColor: 'transparent' }}>
+                Kembali
+              </button>
+            </div>
           </div>
         )}
 
@@ -257,9 +288,42 @@ const CustomerPickup = () => {
               <p className="text-secondary">Pesanan ini sudah pernah digunakan<br/>untuk pickup.</p>
               {pickupOrder && <p className="text-primary mt-4" style={{ fontWeight: '600' }}>Order #{pickupOrder.orderId}</p>}
             </div>
-            <button className="btn btn-secondary" onClick={() => setPickupState('idle')} style={{ width: '100%', maxWidth: '320px' }}>
-              Kembali
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', maxWidth: '320px' }}>
+              <button className="btn btn-primary" onClick={() => setPickupState('scanning')}>
+                Scan Lagi
+              </button>
+              <button className="btn btn-secondary" onClick={() => setPickupState('manual-code')}>
+                Masukkan Kode Manual
+              </button>
+              <button className="btn btn-secondary" onClick={() => setPickupState('idle')} style={{ border: 'none', backgroundColor: 'transparent' }}>
+                Kembali
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* WRONG BOOTH STATE */}
+        {pickupState === 'wrong-booth' && (
+          <div style={{ padding: '24px', flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', gap: '24px' }}>
+            <AlertCircle size={64} color="var(--error-color)" />
+            <div>
+              <h2 className="text-lg mb-2">Salah Lokasi Pengambilan!</h2>
+              <p className="text-secondary">Pesanan ini seharusnya diambil di:</p>
+              <div style={{ marginTop: '12px', padding: '12px', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px', border: '1px solid var(--border-color)', fontWeight: '700', fontSize: '16px', color: 'var(--text-primary)' }}>
+                {pickupOrder?.custom_event_pickup_option || '-'}
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', maxWidth: '320px', marginTop: '8px' }}>
+              <button className="btn btn-primary" onClick={() => setPickupState('scanning')}>
+                Scan Lagi
+              </button>
+              <button className="btn btn-secondary" onClick={() => setPickupState('manual-code')}>
+                Masukkan Kode Manual
+              </button>
+              <button className="btn btn-secondary" onClick={() => setPickupState('idle')} style={{ border: 'none', backgroundColor: 'transparent' }}>
+                Kembali
+              </button>
+            </div>
           </div>
         )}
 

@@ -30,7 +30,7 @@ const AppShell = () => {
         maxWidth: '480px',
         margin: '0 auto'
       }}>
-        {capabilities.canPicking && (
+        {(capabilities.canPicking || capabilities.canReceivePicking) && (
           <NavLink 
             to="/" 
             end

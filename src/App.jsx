@@ -13,6 +13,7 @@ import Success from './pages/Success';
 import Settings from './pages/Settings';
 import ReceivePicking from './pages/ReceivePicking';
 import History from './pages/History';
+import PickupHistory from './pages/PickupHistory';
 import DeliveryNoteDetail from './pages/DeliveryNoteDetail';
 
 const Toast = () => {
@@ -51,6 +52,7 @@ const App = () => {
                 </CapabilityGuard>
               } />
               <Route path="/history" element={<History />} />
+              <Route path="/pickup-history" element={<PickupHistory />} />
               <Route path="/settings" element={<Settings />} />
             </Route>
 

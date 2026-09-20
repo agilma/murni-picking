@@ -74,6 +74,7 @@ export const login = async (usr, pwd) => {
       success: true, 
       data: response, 
       user: loggedUser,
+      full_name: response.message?.full_name || response.full_name || loggedUser,
       role_profile_name: response.role_profile_name || response.message?.role_profile_name,
       event_booth: eventBooth
     };

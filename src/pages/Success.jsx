@@ -43,7 +43,11 @@ const Success = () => {
   };
 
   const proceedToNextOrder = () => {
-    navigate('/');
+    if (type === 'DINE_IN') {
+      navigate('/pickup', { replace: true });
+    } else {
+      navigate('/', { replace: true });
+    }
   };
 
   const handleNextOrder = () => {
@@ -66,6 +70,51 @@ const Success = () => {
   }
 
   const title = type === 'DINE_IN' ? 'Pickup Completed' : 'Picking Completed';
+
+  if (type === 'DINE_IN') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: 'var(--bg-primary)', padding: '24px', alignItems: 'center', justifyContent: 'center', animation: 'fadeIn 0.5s ease-out' }}>
+        <div style={{ animation: 'scaleIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)', marginBottom: '24px' }}>
+          <CheckCircle size={80} color="var(--success-color)" />
+        </div>
+        
+        <div style={{ fontSize: '14px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>Pickup Code</div>
+        <h2 style={{ fontSize: '36px', fontWeight: '900', marginBottom: '8px', color: 'var(--text-primary)', textAlign: 'center', letterSpacing: '2px' }}>
+          {customPickUpCode || '-'}
+        </h2>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: '24px', textAlign: 'center', maxWidth: '350px', lineHeight: '1.5' }}>
+          Pesanan ini <b>telah berhasil diambil</b> oleh pelanggan.
+        </p>
+        
+        <div style={{ backgroundColor: '#ffffff', padding: '24px', borderRadius: '16px', width: '100%', maxWidth: '400px', marginBottom: '32px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+          <div style={{ marginBottom: '16px', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sales Order</div>
+            <div style={{ fontSize: '22px', fontWeight: '700', color: 'var(--text-primary)' }}>{salesOrderNo || '-'}</div>
+          </div>
+
+          <div style={{ marginBottom: '8px' }}>
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Customer</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '16px', fontWeight: '600', color: 'var(--text-primary)' }}>{customer || '-'}</span>
+            </div>
+          </div>
+        </div>
+        
+        <button 
+          className="btn btn-primary" 
+          style={{ width: '100%', maxWidth: '400px', padding: '16px', fontSize: '18px', fontWeight: 'bold', borderRadius: '12px' }}
+          onClick={proceedToNextOrder}
+        >
+          Process Next Order
+        </button>
+
+        <style>{`
+          @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+          @keyframes scaleIn { from { transform: scale(0); } to { transform: scale(1); } }
+        `}</style>
+      </div>
+    );
+  }
 
   return (
     <div style={{
@@ -155,11 +204,11 @@ const Success = () => {
                   }}
                 >
                   {copied ? <Check size={16} /> : <Copy size={16} />}
-                  {copied ? 'Tersalin' : 'Copy'}
+                  {copied ? 'Copied!' : 'Copy'}
                 </button>
               </div>
-              <p className="text-secondary" style={{ fontSize: '14px', margin: 0 }}>
-                Kode ini digunakan saat pengambilan pesanan.
+              <p className="text-secondary" style={{ fontSize: '14px', margin: 0, textAlign: 'left' }}>
+                Minta pelanggan menuliskan kode ini.
               </p>
             </>
           ) : (
@@ -170,53 +219,56 @@ const Success = () => {
         </div>
       )}
 
-      <div style={{ marginTop: '40px', width: '100%', maxWidth: '320px' }}>
-        <button className="btn btn-primary" onClick={handleNextOrder} style={{ width: '100%' }}>
-          Process Next Order
+      <div style={{ marginTop: 'auto', width: '100%', paddingTop: '24px' }}>
+        <button 
+          className="btn btn-primary" 
+          onClick={handleNextOrder}
+          style={{ width: '100%', maxWidth: '320px' }}
+        >
+          {type === 'DINE_IN' ? 'Process Next Order' : 'Selesai'}
         </button>
       </div>
 
       {showNextOrderConfirmation && (
-        <div style={{ 
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
-          backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 9999, 
-          display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center',
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
           padding: '24px'
         }}>
-          <div style={{ 
-            backgroundColor: 'var(--bg-primary)', 
-            width: '100%', 
-            maxWidth: '320px', 
-            borderRadius: '12px', 
+          <div style={{
+            backgroundColor: 'var(--bg-primary)',
             padding: '24px',
-            boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
-            textAlign: 'center',
-            animation: 'scaleIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '320px',
+            boxShadow: '0 10px 25px rgba(0,0,0,0.1)'
           }}>
-            <h3 style={{ fontSize: '18px', fontWeight: '700', margin: '0 0 16px 0', color: 'var(--text-primary)' }}>
-              Pickup Code belum disalin
-            </h3>
-            
+            <h3 style={{ fontSize: '18px', fontWeight: '700', marginBottom: '12px', color: 'var(--text-primary)' }}>Peringatan</h3>
             <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '24px', lineHeight: '1.5' }}>
-              Anda belum menyalin Pickup Code untuk order ini.<br/><br/>Apakah Anda yakin ingin melanjutkan ke order berikutnya?
+              Anda belum menyalin (copy) Kode Pickup. Pastikan pelanggan sudah mengetahui kodenya sebelum melanjutkan.
             </p>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', gap: '12px' }}>
               <button 
+                className="btn btn-secondary" 
+                style={{ flex: 1 }}
                 onClick={() => setShowNextOrderConfirmation(false)}
-                className="btn btn-primary"
-                style={{ width: '100%' }}
               >
-                Tetap di Halaman
+                Batal
               </button>
-              
               <button 
-                onClick={proceedToNextOrder}
-                className="btn btn-secondary"
-                style={{ width: '100%' }}
+                className="btn btn-primary" 
+                style={{ flex: 1 }}
+                onClick={() => {
+                  setShowNextOrderConfirmation(false);
+                  proceedToNextOrder();
+                }}
               >
-                Lanjut Order Berikutnya
+                Lanjutkan
               </button>
             </div>
           </div>

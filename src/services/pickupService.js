@@ -96,6 +96,7 @@ export const validatePickupQr = async (code) => {
         salesInvoiceName: invoiceDetail.name,
         customerName: so.customer_name || so.customer,
         custom_event_pickup_option: so.custom_event_pickup_option,
+        custom_event_booth: so.custom_event_booth,
         items: aggregatedItems,
         totalQty: totalQty,
         total: so.grand_total,

@@ -109,3 +109,73 @@ export const updateSalesOrder = async (salesOrderName, payload) => {
   const response = await apiClient.put(endpoint, payload);
   return response.data;
 };
+
+export const getSalesOrderItems = async (salesOrderName) => {
+  const endpoint = `/api/resource/Sales Order/${encodeURIComponent(salesOrderName)}`;
+  const response = await apiClient.get(endpoint);
+  return response.data || null;
+};
+
+/**
+ * Fetch History Sales Orders for Pickup History page
+ * @param {string} searchQuery - Search by SO name
+ * @param {number} page - Pagination page
+ * @param {number} limit - Items per page
+ * @param {string} roleProfile - User's role profile ('Picking' or 'Pickup')
+ * @param {Array<string>} eventBooth - Array of allowed booths for the user
+ * @returns {Promise<Array>} Array of Sales Order documents
+ */
+export const fetchHistorySalesOrders = async (searchQuery = '', page = 1, limit = 20, roleProfile = '', eventBooth = []) => {
+  const filters = [
+    ["Sales Order", "custom_picked_up", "=", 1]
+  ];
+
+  if (searchQuery) {
+    filters.push(["Sales Order", "name", "like", `%${searchQuery}%`]);
+  }
+
+  if (roleProfile === 'Picking') {
+    filters.push(["Sales Order", "custom_event_pickup_option", "like", "Booth%"]);
+    
+    // Convert string to array if needed
+    let booths = Array.isArray(eventBooth) ? eventBooth : (eventBooth ? [eventBooth] : []);
+    
+    if (booths.length > 0) {
+      filters.push(["Sales Order", "custom_event_booth", "in", booths]);
+    } else {
+      // If no booth permission, technically they shouldn't see anything, 
+      // but if the fallback logic is needed we can pass empty array to return none
+      // Using a dummy value that will match nothing.
+      filters.push(["Sales Order", "custom_event_booth", "=", "NO_BOOTH_PERMISSION"]);
+    }
+  } else if (roleProfile === 'Pickup') {
+    filters.push(["Sales Order", "custom_event_pickup_option", "in", ["Pickup Station", "Station Pickup", "Pickup Store", "Station_Pickup"]]);
+  }
+
+  const offset = (page - 1) * limit;
+
+  try {
+    const response = await apiClient.get('/api/resource/Sales Order', {
+      filters: JSON.stringify(filters),
+      limit_start: offset,
+      limit_page_length: limit,
+      order_by: 'modified desc',
+      fields: JSON.stringify([
+        'name', 
+        'customer', 
+        'customer_name', 
+        'modified', 
+        'custom_event_pickup_option', 
+        'custom_event_booth', 
+        'grand_total', 
+        'status',
+        'custom_picked_up'
+      ])
+    });
+
+    return response.data || [];
+  } catch (error) {
+    console.error("Failed to fetch history sales orders:", error);
+    return [];
+  }
+};

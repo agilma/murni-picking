@@ -55,6 +55,8 @@ const getTimeElapsedProps = (dateStr, timeStr) => {
   return { text, color, fw };
 };
 
+import ReceivePicking from './ReceivePicking';
+
 const Home = () => {
   const [search, setSearch] = useState('');
   const [selectedDN, setSelectedDN] = useState(null); // Local state for Detail DN
@@ -63,16 +65,14 @@ const Home = () => {
   const [isAutoRefreshing, setIsAutoRefreshing] = useState(false);
   
   const { user } = useAuth();
-  const capabilities = useCapabilities();
   const navigate = useNavigate();
-
-  // Redirect users who don't have picking capabilities
-  useEffect(() => {
-    // Make sure we have loaded capabilities before redirecting
-    if (capabilities && !capabilities.canPicking) {
-      navigate('/pickup', { replace: true });
-    }
-  }, [capabilities, navigate]);
+  const capabilities = useCapabilities();
+  
+  // If user cannot do picking but can receive picking (e.g. Pickup role),
+  // show the Receive Picking page as their home page.
+  if (capabilities && !capabilities.canPicking && capabilities.canReceivePicking) {
+    return <ReceivePicking isHome={true} />;
+  }
   
   // Pull to refresh states
   const [startY, setStartY] = useState(0);
