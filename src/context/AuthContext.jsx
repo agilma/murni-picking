@@ -20,6 +20,7 @@ export const AuthProvider = ({ children }) => {
           let roleProfileName = 'Unknown';
           let eventBooth = null;
           let full_name = null;
+          let appMode = 'picking';
 
           // Restore role_profile_name and event_booth from localStorage if available
           const storedUserStr = localStorage.getItem('murni_user_session');
@@ -30,6 +31,7 @@ export const AuthProvider = ({ children }) => {
                 roleProfileName = storedUser.roleProfileName || 'Unknown';
                 eventBooth = storedUser.eventBooth || null;
                 full_name = storedUser.full_name || null;
+                appMode = storedUser.appMode || 'picking';
               }
             } catch (e) {
               console.error('Failed to parse stored user session');
@@ -37,7 +39,7 @@ export const AuthProvider = ({ children }) => {
           }
 
           const roleProfile = normalizeRoleProfile(roleProfileName);
-          const capabilities = getCapabilities(roleProfile);
+          const capabilities = getCapabilities(appMode);
 
 
 
@@ -47,7 +49,8 @@ export const AuthProvider = ({ children }) => {
             roleProfileName,
             roleProfile,
             capabilities,
-            eventBooth
+            eventBooth,
+            appMode
           });
           setIsAuthenticated(true);
         } else {
@@ -79,9 +82,10 @@ export const AuthProvider = ({ children }) => {
       
       const roleProfileName = response.role_profile_name || 'Unknown';
       const eventBooth = response.event_booth || null;
+      const appMode = response.appMode || 'picking';
       
       const roleProfile = normalizeRoleProfile(roleProfileName);
-      const capabilities = getCapabilities(roleProfile);
+      const capabilities = getCapabilities(appMode);
 
 
 
@@ -91,7 +95,8 @@ export const AuthProvider = ({ children }) => {
         roleProfileName,
         roleProfile,
         capabilities,
-        eventBooth
+        eventBooth,
+        appMode
       }; 
       
       localStorage.setItem('murni_user_session', JSON.stringify(userData));

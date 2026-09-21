@@ -404,7 +404,7 @@ const ReceivePicking = ({ isHome = false }) => {
           )}
           <div style={{ flexGrow: 1, paddingLeft: isHome ? '0' : '0' }}>
             <h1 className="text-xl" style={{ fontWeight: '700', margin: 0 }}>
-              {isHome ? "Murni-Booth" : "Terima Barang"}
+              {isHome ? "Murni Picking" : "Terima Barang"}
             </h1>
           </div>
 

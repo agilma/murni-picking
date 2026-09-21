@@ -42,7 +42,7 @@ const Login = () => {
   return (
     <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', minHeight: '100vh', justifyContent: 'center' }}>
       <div className="text-center mb-4">
-        <h2 className="text-xl">Murni Booth</h2>
+        <h2 className="text-xl">Murni Picking</h2>
         <p className="text-muted" style={{ marginTop: '8px' }}>Masuk ke sistem operasional</p>
       </div>
 
@@ -118,7 +118,7 @@ const Login = () => {
               disabled={isSubmitting}
               className="btn btn-primary"
             >
-              {isSubmitting ? 'Memproses...' : 'Masuk ke Booth'}
+              {isSubmitting ? 'Memproses...' : 'Login Masuk'}
             </button>
           </div>
         </form>

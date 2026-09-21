@@ -240,7 +240,7 @@ const Home = () => {
       
       <div className="header" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h1 className="text-xl">Murni-Booth</h1>
+          <h1 className="text-xl">Murni Picking</h1>
           <div style={{ 
             fontSize: '13px', 
             color: 'var(--accent-primary)', 
@@ -254,7 +254,7 @@ const Home = () => {
             border: '1px solid rgba(59, 130, 246, 0.2)'
           }}>
             <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--accent-primary)', animation: 'pulse 2s infinite' }}></div>
-            MODE: {user?.roleProfile?.toUpperCase() || 'UNKNOWN'}
+            MODE: {user?.appMode?.toUpperCase() || 'PICKING'}
           </div>
         </div>
       </div>
@@ -299,7 +299,7 @@ const Home = () => {
       )}
 
       <div style={{ padding: '16px 16px 0 16px', display: 'flex', gap: '12px' }}>
-        {(user?.roleProfile === 'Picking' || user?.roleProfile === 'Pickup') && (
+        {(user?.appMode === 'picking' || user?.appMode === 'pickup' || user?.appMode === 'all') && (
           <button 
             className="btn btn-secondary" 
             onClick={() => navigate('/receive-picking')}

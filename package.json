@@ -1,6 +1,6 @@
 {
-  "name": "murni-booth",
-  "description": "Murni Booth Operational Application",
+  "name": "murni-picking",
+  "description": "Murni Picking Operational Application",
   "private": true,
   "version": "1.0.2",
   "type": "module",

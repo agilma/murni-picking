@@ -66,6 +66,21 @@ export const login = async (usr, pwd) => {
 
     const loggedUser = response.message?.user || response.message?.email || usr;
     
+    // Extract mode from roles
+    const roles = response.message?.roles || [];
+    const rolesLower = roles.map(r => r.toLowerCase());
+    const hasPicker = rolesLower.includes('picker');
+    const hasPickup = rolesLower.includes('pickup');
+    
+    let appMode = 'picking'; // default
+    if (hasPicker && hasPickup) {
+      appMode = 'all';
+    } else if (hasPickup) {
+      appMode = 'pickup';
+    } else if (hasPicker) {
+      appMode = 'picking';
+    }
+    
     // Fetch Event Booth permission
     const eventBooth = await getBoothPermission(loggedUser);
 
@@ -75,6 +90,8 @@ export const login = async (usr, pwd) => {
       user: loggedUser,
       full_name: response.message?.full_name || response.full_name || loggedUser,
       role_profile_name: response.role_profile_name || response.message?.role_profile_name,
+      roles: roles,
+      appMode: appMode,
       event_booth: eventBooth
     };
   } catch (error) {

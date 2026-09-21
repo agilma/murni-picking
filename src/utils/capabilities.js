@@ -11,19 +11,27 @@ export const normalizeRoleProfile = (rawProfile) => {
   return 'Unknown';
 };
 
-export const getCapabilities = (roleProfile) => {
-  switch (roleProfile) {
-    case 'Picking':
+export const getCapabilities = (appMode) => {
+  switch (appMode) {
+    case 'picking':
       return {
         canPicking: true,
-        canReceivePicking: true,
-        canCustomerPickup: true,
+        canReceivePicking: false,
+        canCustomerPickup: false,
         canSubmitDeliveryNote: false,
       };
 
-    case 'Pickup':
+    case 'pickup':
       return {
         canPicking: false,
+        canReceivePicking: true,
+        canCustomerPickup: true,
+        canSubmitDeliveryNote: true,
+      };
+      
+    case 'all':
+      return {
+        canPicking: true,
         canReceivePicking: true,
         canCustomerPickup: true,
         canSubmitDeliveryNote: true,

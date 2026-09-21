@@ -366,7 +366,7 @@ const CustomerPickup = () => {
             <div>
               <h2 className="text-xl mb-4" style={{ color: 'var(--success-color)' }}>Pickup Berhasil!</h2>
               <p className="text-primary mb-2">Pesanan <strong>#{pickupOrder?.orderId}</strong><br/>telah berhasil diambil.</p>
-              <p className="text-secondary mt-4">Terima kasih telah menggunakan<br/>Murni Booth.</p>
+              <p className="text-secondary mt-4">Terima kasih telah menggunakan<br/>Murni Picking.</p>
             </div>
             <button className="btn btn-primary mt-4" onClick={() => navigate('/')} style={{ width: '100%', maxWidth: '320px' }}>
               Kembali ke Home
