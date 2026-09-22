@@ -97,48 +97,7 @@ const ReceivePicking = ({ isHome = false }) => {
         // Check if booth matches user session
         const candidateBooth = authorizedCandidates[0].custom_event_pickup_option || authorizedCandidates[0].custom_event_booth;
         
-        let allowedBooths = user?.eventBooth || [];
-        if (!Array.isArray(allowedBooths)) allowedBooths = [allowedBooths];
-        
-        // Skip strict full_name fallback for Pickup role if they have no explicit permissions
-        if (allowedBooths.length === 0 && user?.full_name && user?.roleProfile !== 'Pickup') {
-          allowedBooths = [user.full_name];
-        }
-
-        let isWrongBooth = false;
-        if (candidateBooth) {
-          const cb = candidateBooth.toLowerCase();
-          
-          if (allowedBooths.length > 0) {
-            const matched = allowedBooths.some(b => b && b.toLowerCase() === cb);
-            if (!matched) {
-              isWrongBooth = true;
-              
-              // Exception: If pickup option is generic 'booth' and user is a Picker, allow it
-              if (cb === 'booth' && user?.roleProfile === 'Picking') {
-                isWrongBooth = false;
-              }
-            }
-          } else {
-            // User has no explicit permissions (allowedBooths is empty).
-            // Currently this applies to Pickup role without eventBooth (due to skipped fallback above).
-            // They can receive goods, EXCEPT if the goods are meant for a Booth.
-            if (user?.roleProfile === 'Pickup' && cb.startsWith('booth')) {
-              isWrongBooth = true;
-            }
-          }
-        }
-        
-        if (isWrongBooth) {
-           setWrongBoothData({
-             expectedBooth: candidateBooth,
-             scannedSo: authorizedCandidates[0].against_sales_order || authorizedCandidates[0].sales_order || authorizedCandidates[0].name
-           });
-           setShowWrongBoothConfirm(true);
-           setPickupCode('');
-           setLoading(false);
-           return;
-        }
+        // Larangan beda booth sudah dihapus sesuai permintaan
 
         setCandidateDns(prev => {
           const newCandidates = isBatchMode ? [...prev] : [];

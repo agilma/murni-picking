@@ -16,7 +16,7 @@ export const getCapabilities = (appMode) => {
     case 'picking':
       return {
         canPicking: true,
-        canReceivePicking: false,
+        canReceivePicking: true,
         canCustomerPickup: false,
         canSubmitDeliveryNote: false,
       };

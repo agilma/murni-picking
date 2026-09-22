@@ -259,7 +259,8 @@ export const OrderProvider = ({ children }) => {
   // Load details without claiming (when card is clicked)
   const loadDeliveryNoteDetail = async (dnName) => {
     try {
-
+      const dnDetail = await getDeliveryNoteWithItems(dnName);
+      if (!dnDetail) return null;
       
       return {
         docstatus: dnDetail?.docstatus,
