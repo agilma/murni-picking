@@ -299,7 +299,7 @@ const Home = () => {
       )}
 
       <div style={{ padding: '16px 16px 0 16px', display: 'flex', gap: '12px' }}>
-        {(user?.appMode === 'picking' || user?.appMode === 'pickup' || user?.appMode === 'all') && (
+        {capabilities.canReceivePicking && (
           <button 
             className="btn btn-secondary" 
             onClick={() => navigate('/receive-picking')}
